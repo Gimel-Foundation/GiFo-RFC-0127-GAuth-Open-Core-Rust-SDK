@@ -2,7 +2,7 @@ use crate::types::*;
 use super::types::*;
 
 pub fn chk01_credential_integrity(
-    _credential: &CredentialReference,
+    credential: &CredentialReference,
     poa: &PoaCredential,
 ) -> CheckResult {
     if let Some(ref ver) = poa.schema_version {
@@ -15,6 +15,26 @@ pub fn chk01_credential_integrity(
             };
         }
     }
+
+    if let Some(ref snapshot) = credential.poa_snapshot {
+        if let (Ok(snapshot_checksum), Ok(live_checksum)) = (
+            crate::crypto::compute_scope_checksum(&snapshot.scope),
+            crate::crypto::compute_scope_checksum(&poa.scope),
+        ) {
+            if snapshot_checksum != live_checksum {
+                return CheckResult {
+                    check_id: "CHK-01".into(),
+                    check_name: "Credential Integrity".into(),
+                    result: CheckOutcome::Fail,
+                    detail: Some(format!(
+                        "scope_checksum mismatch: snapshot '{}' != live '{}'",
+                        snapshot_checksum, live_checksum
+                    )),
+                };
+            }
+        }
+    }
+
     CheckResult {
         check_id: "CHK-01".into(),
         check_name: "Credential Integrity".into(),
@@ -821,21 +841,31 @@ pub fn chk13_budget(
         };
     }
 
-    if let Some(ref params) = action.parameters {
-        if let Some(cost_val) = params.get("amount_cents") {
-            if let Some(cost) = cost_val.as_i64() {
-                if cost > remaining {
-                    return CheckResult {
-                        check_id: "CHK-13".into(),
-                        check_name: "Budget".into(),
-                        result: CheckOutcome::Fail,
-                        detail: Some(format!(
-                            "Cost {} cents exceeds remaining {} cents",
-                            cost, remaining
-                        )),
-                    };
-                }
-            }
+    let explicit_cost = action
+        .parameters
+        .as_ref()
+        .and_then(|p| p.get("amount_cents"))
+        .and_then(|v| v.as_f64());
+
+    let verb_base_cost = poa
+        .scope
+        .core_verbs
+        .get(&action.verb)
+        .and_then(|p| p.cost_cents_base);
+
+    let effective_cost = explicit_cost.or(verb_base_cost);
+
+    if let Some(cost) = effective_cost {
+        if cost as i64 > remaining {
+            return CheckResult {
+                check_id: "CHK-13".into(),
+                check_name: "Budget".into(),
+                result: CheckOutcome::Fail,
+                detail: Some(format!(
+                    "Cost {} cents exceeds remaining {} cents",
+                    cost, remaining
+                )),
+            };
         }
     }
 

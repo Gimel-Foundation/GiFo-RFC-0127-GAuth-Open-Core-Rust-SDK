@@ -108,6 +108,24 @@ impl AdapterRegistry {
         }
     }
 
+    fn check_no_collision(&self, name: &str, adapter_type: &AdapterType) -> Result<()> {
+        let exists = match adapter_type {
+            AdapterType::OAuthEngine => self.oauth_engines.contains_key(name),
+            AdapterType::Foundry => self.foundries.contains_key(name),
+            AdapterType::AiEnrichment => self.ai_enrichments.contains_key(name),
+            AdapterType::RiskScoring => self.risk_scorers.contains_key(name),
+            AdapterType::RegulatoryReasoning => self.regulatory_reasoners.contains_key(name),
+        };
+        if exists {
+            Err(GAuthError::AdapterRegistrationFailed(format!(
+                "Adapter '{}' of type {} is already registered; unregister it first",
+                name, adapter_type
+            )))
+        } else {
+            Ok(())
+        }
+    }
+
     pub fn register_oauth_engine(
         &mut self,
         manifest: &AdapterManifest,
@@ -120,6 +138,7 @@ impl AdapterRegistry {
             ));
         }
         self.check_namespace(manifest)?;
+        self.check_no_collision(&manifest.name, &manifest.adapter_type)?;
         self.verify_manifest(manifest, signature)?;
         self.oauth_engines.insert(manifest.name.clone(), adapter);
         Ok(())
@@ -137,6 +156,7 @@ impl AdapterRegistry {
             ));
         }
         self.check_namespace(manifest)?;
+        self.check_no_collision(&manifest.name, &manifest.adapter_type)?;
         self.verify_manifest(manifest, signature)?;
         self.foundries.insert(manifest.name.clone(), adapter);
         Ok(())
@@ -154,6 +174,7 @@ impl AdapterRegistry {
             ));
         }
         self.check_namespace(manifest)?;
+        self.check_no_collision(&manifest.name, &manifest.adapter_type)?;
         self.verify_manifest(manifest, signature)?;
         self.ai_enrichments.insert(manifest.name.clone(), adapter);
         Ok(())
@@ -171,6 +192,7 @@ impl AdapterRegistry {
             ));
         }
         self.check_namespace(manifest)?;
+        self.check_no_collision(&manifest.name, &manifest.adapter_type)?;
         self.verify_manifest(manifest, signature)?;
         self.risk_scorers.insert(manifest.name.clone(), adapter);
         Ok(())
@@ -188,6 +210,7 @@ impl AdapterRegistry {
             ));
         }
         self.check_namespace(manifest)?;
+        self.check_no_collision(&manifest.name, &manifest.adapter_type)?;
         self.verify_manifest(manifest, signature)?;
         self.regulatory_reasoners
             .insert(manifest.name.clone(), adapter);

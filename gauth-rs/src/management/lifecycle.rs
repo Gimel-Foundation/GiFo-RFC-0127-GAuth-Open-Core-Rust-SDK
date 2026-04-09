@@ -254,6 +254,21 @@ impl MandateManager {
         }
 
         let now = Utc::now();
+        if let Some(expires_at) = mandate.expires_at {
+            if now >= expires_at {
+                mandate.status = MandateStatus::Expired;
+                mandate.audit_trail.push(MandateAuditEntry {
+                    operation: MandateOperation::Expire,
+                    performed_by: "system".into(),
+                    timestamp: now,
+                    mandate_id: request.mandate_id,
+                    reason: Some("TTL elapsed while suspended".into()),
+                    details: None,
+                });
+                return Err(GAuthError::CredentialExpired);
+            }
+        }
+
         mandate.status = MandateStatus::Active;
         mandate.suspended_at = None;
 
@@ -437,7 +452,7 @@ impl MandateManager {
             .mandates
             .iter()
             .filter(|(_, m)| {
-                m.status == MandateStatus::Active
+                (m.status == MandateStatus::Active || m.status == MandateStatus::Suspended)
                     && m.expires_at.map(|e| now >= e).unwrap_or(false)
             })
             .map(|(id, _)| id.clone())
