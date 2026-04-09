@@ -44,25 +44,10 @@ impl PepEngine {
                 &request.agent, poa, request.context.as_ref(),
             );
             if chk02.result == CheckOutcome::Fail {
-                let code = if let Some(ref detail) = chk02.detail {
-                    if detail.contains("Agent mismatch") {
-                        "AGENT_MISMATCH"
-                    } else if detail.contains("revoked") {
-                        "MANDATE_REVOKED"
-                    } else if detail.contains("expired") {
-                        "CREDENTIAL_EXPIRED"
-                    } else if detail.contains("superseded") {
-                        "MANDATE_SUPERSEDED"
-                    } else if detail.contains("Budget") {
-                        "BUDGET_EXCEEDED"
-                    } else if detail.contains("suspended") {
-                        "MANDATE_SUSPENDED"
-                    } else {
-                        "CREDENTIAL_EXPIRED"
-                    }
-                } else {
-                    "CREDENTIAL_EXPIRED"
-                };
+                let code = chk02
+                    .failure_code
+                    .as_deref()
+                    .unwrap_or("CREDENTIAL_EXPIRED");
                 collect_result(&chk02, &mut all_violations, code);
             }
             all_checks.push(chk02);

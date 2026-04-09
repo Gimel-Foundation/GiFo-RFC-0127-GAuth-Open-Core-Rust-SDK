@@ -131,6 +131,15 @@ pub struct CheckResult {
     pub result: CheckOutcome,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub detail: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none", default)]
+    pub failure_code: Option<String>,
+}
+
+impl CheckResult {
+    pub fn with_failure_code(mut self, code: &str) -> Self {
+        self.failure_code = Some(code.to_string());
+        self
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]

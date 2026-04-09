@@ -12,6 +12,7 @@ pub fn chk01_credential_integrity(
                 check_name: "Credential Integrity".into(),
                 result: CheckOutcome::Fail,
                 detail: Some(format!("Unsupported schema_version: {}", ver)),
+                failure_code: None,
             };
         }
     }
@@ -30,6 +31,7 @@ pub fn chk01_credential_integrity(
                         "scope_checksum mismatch: snapshot '{}' != live '{}'",
                         snapshot_checksum, live_checksum
                     )),
+                    failure_code: None,
                 };
             }
         }
@@ -40,6 +42,7 @@ pub fn chk01_credential_integrity(
         check_name: "Credential Integrity".into(),
         result: CheckOutcome::Pass,
         detail: None,
+        failure_code: None,
     }
 }
 
@@ -57,6 +60,7 @@ pub fn chk02_temporal_status(
                 "Agent mismatch: PoA subject '{}' != agent '{}'",
                 poa.parties.subject, agent.agent_id
             )),
+            failure_code: Some("AGENT_MISMATCH".into()),
         };
     }
 
@@ -71,6 +75,7 @@ pub fn chk02_temporal_status(
                             check_name: "Temporal & Status".into(),
                             result: CheckOutcome::Fail,
                             detail: Some("Mandate revoked".into()),
+                            failure_code: Some("MANDATE_REVOKED".into()),
                         };
                     }
                     "expired" => {
@@ -79,6 +84,7 @@ pub fn chk02_temporal_status(
                             check_name: "Temporal & Status".into(),
                             result: CheckOutcome::Fail,
                             detail: Some("Mandate expired".into()),
+                            failure_code: Some("CREDENTIAL_EXPIRED".into()),
                         };
                     }
                     "superseded" => {
@@ -87,6 +93,7 @@ pub fn chk02_temporal_status(
                             check_name: "Temporal & Status".into(),
                             result: CheckOutcome::Fail,
                             detail: Some("Mandate superseded".into()),
+                            failure_code: Some("MANDATE_SUPERSEDED".into()),
                         };
                     }
                     "budget_exceeded" => {
@@ -95,6 +102,16 @@ pub fn chk02_temporal_status(
                             check_name: "Temporal & Status".into(),
                             result: CheckOutcome::Fail,
                             detail: Some("Budget exhausted".into()),
+                            failure_code: Some("BUDGET_EXCEEDED".into()),
+                        };
+                    }
+                    "suspended" => {
+                        return CheckResult {
+                            check_id: "CHK-02".into(),
+                            check_name: "Temporal & Status".into(),
+                            result: CheckOutcome::Fail,
+                            detail: Some("Mandate suspended".into()),
+                            failure_code: Some("MANDATE_SUSPENDED".into()),
                         };
                     }
                     _ => {
@@ -103,6 +120,7 @@ pub fn chk02_temporal_status(
                             check_name: "Temporal & Status".into(),
                             result: CheckOutcome::Fail,
                             detail: Some(format!("Unknown mandate status: {}", status)),
+                            failure_code: Some("CREDENTIAL_EXPIRED".into()),
                         };
                     }
                 }
@@ -115,6 +133,7 @@ pub fn chk02_temporal_status(
         check_name: "Temporal & Status".into(),
         result: CheckOutcome::Pass,
         detail: None,
+        failure_code: None,
     }
 }
 
@@ -135,6 +154,7 @@ pub fn chk03_governance_profile(
                         "Auto-deploy not allowed for profile {:?}",
                         profile
                     )),
+                    failure_code: None,
                 };
             }
         }
@@ -150,6 +170,7 @@ pub fn chk03_governance_profile(
                 poa.requirements.approval_mode,
                 profile.minimum_approval_mode()
             )),
+            failure_code: None,
         };
     }
 
@@ -158,6 +179,7 @@ pub fn chk03_governance_profile(
         check_name: "Governance Profile".into(),
         result: CheckOutcome::Pass,
         detail: None,
+        failure_code: None,
     }
 }
 
@@ -185,6 +207,7 @@ pub fn chk04_phase(action: &ActionDescriptor, poa: &PoaCredential) -> CheckResul
                 "Verb '{}' not permitted in phase {:?}",
                 verb, phase
             )),
+            failure_code: None,
         };
     }
 
@@ -193,6 +216,7 @@ pub fn chk04_phase(action: &ActionDescriptor, poa: &PoaCredential) -> CheckResul
         check_name: "Phase".into(),
         result: CheckOutcome::Pass,
         detail: None,
+        failure_code: None,
     }
 }
 
@@ -205,6 +229,7 @@ pub fn chk05_sector(action: &ActionDescriptor, poa: &PoaCredential) -> CheckResu
                 check_name: "Sector".into(),
                 result: CheckOutcome::Skip,
                 detail: Some("No sector restriction".into()),
+                failure_code: None,
             };
         }
     };
@@ -215,6 +240,7 @@ pub fn chk05_sector(action: &ActionDescriptor, poa: &PoaCredential) -> CheckResu
             check_name: "Sector".into(),
             result: CheckOutcome::Fail,
             detail: Some("Sector-restricted PoA requires sector context on action".into()),
+            failure_code: None,
         },
         Some(sector) => {
             if allowed.contains(sector) {
@@ -223,6 +249,7 @@ pub fn chk05_sector(action: &ActionDescriptor, poa: &PoaCredential) -> CheckResu
                     check_name: "Sector".into(),
                     result: CheckOutcome::Pass,
                     detail: None,
+                    failure_code: None,
                 }
             } else {
                 CheckResult {
@@ -230,6 +257,7 @@ pub fn chk05_sector(action: &ActionDescriptor, poa: &PoaCredential) -> CheckResu
                     check_name: "Sector".into(),
                     result: CheckOutcome::Fail,
                     detail: Some(format!("Sector '{}' not in allowed sectors", sector)),
+                    failure_code: None,
                 }
             }
         }
@@ -261,6 +289,7 @@ pub fn chk06_region(action: &ActionDescriptor, poa: &PoaCredential) -> CheckResu
                 check_name: "Region".into(),
                 result: CheckOutcome::Skip,
                 detail: Some("No region restriction".into()),
+                failure_code: None,
             };
         }
     };
@@ -271,6 +300,7 @@ pub fn chk06_region(action: &ActionDescriptor, poa: &PoaCredential) -> CheckResu
             check_name: "Region".into(),
             result: CheckOutcome::Fail,
             detail: Some("Region-restricted PoA requires region context on action".into()),
+            failure_code: None,
         },
         Some(region) => {
             let matched = allowed.iter().any(|r| region_matches(region, r));
@@ -280,6 +310,7 @@ pub fn chk06_region(action: &ActionDescriptor, poa: &PoaCredential) -> CheckResu
                     check_name: "Region".into(),
                     result: CheckOutcome::Pass,
                     detail: None,
+                    failure_code: None,
                 }
             } else {
                 CheckResult {
@@ -287,6 +318,7 @@ pub fn chk06_region(action: &ActionDescriptor, poa: &PoaCredential) -> CheckResu
                     check_name: "Region".into(),
                     result: CheckOutcome::Fail,
                     detail: Some(format!("Region '{}' not in allowed regions", region)),
+                    failure_code: None,
                 }
             }
         }
@@ -301,6 +333,7 @@ pub fn chk07_path(action: &ActionDescriptor, poa: &PoaCredential) -> CheckResult
                 check_name: "Path".into(),
                 result: CheckOutcome::Skip,
                 detail: Some("Non-path resource type".into()),
+                failure_code: None,
             };
         }
     }
@@ -315,6 +348,7 @@ pub fn chk07_path(action: &ActionDescriptor, poa: &PoaCredential) -> CheckResult
                     check_name: "Path".into(),
                     result: CheckOutcome::Fail,
                     detail: Some(format!("Path '{}' matches denied pattern '{}'", resource, pattern)),
+                    failure_code: None,
                 };
             }
         }
@@ -327,6 +361,7 @@ pub fn chk07_path(action: &ActionDescriptor, poa: &PoaCredential) -> CheckResult
                 check_name: "Path".into(),
                 result: CheckOutcome::Pass,
                 detail: None,
+                failure_code: None,
             };
         }
         let matched = allowed.iter().any(|p| glob_match::glob_match(p, resource));
@@ -336,6 +371,7 @@ pub fn chk07_path(action: &ActionDescriptor, poa: &PoaCredential) -> CheckResult
                 check_name: "Path".into(),
                 result: CheckOutcome::Fail,
                 detail: Some(format!("Path '{}' not in allowed paths", resource)),
+                failure_code: None,
             };
         }
     }
@@ -345,6 +381,7 @@ pub fn chk07_path(action: &ActionDescriptor, poa: &PoaCredential) -> CheckResult
         check_name: "Path".into(),
         result: CheckOutcome::Pass,
         detail: None,
+        failure_code: None,
     }
 }
 
@@ -357,6 +394,7 @@ pub fn chk08_verb_permission(action: &ActionDescriptor, poa: &PoaCredential) -> 
             check_name: "Verb Permission".into(),
             result: CheckOutcome::Fail,
             detail: Some(format!("Verb '{}' not registered in core_verbs", verb)),
+            failure_code: None,
         },
         Some(policy) => {
             if policy.allowed {
@@ -365,6 +403,7 @@ pub fn chk08_verb_permission(action: &ActionDescriptor, poa: &PoaCredential) -> 
                     check_name: "Verb Permission".into(),
                     result: CheckOutcome::Pass,
                     detail: None,
+                    failure_code: None,
                 }
             } else {
                 CheckResult {
@@ -372,6 +411,7 @@ pub fn chk08_verb_permission(action: &ActionDescriptor, poa: &PoaCredential) -> 
                     check_name: "Verb Permission".into(),
                     result: CheckOutcome::Fail,
                     detail: Some(format!("Verb '{}' is not allowed", verb)),
+                    failure_code: None,
                 }
             }
         }
@@ -394,6 +434,7 @@ pub fn chk09_verb_constraints(
                     check_name: "Verb Constraints".into(),
                     result: CheckOutcome::Skip,
                     detail: Some("No verb entry (already handled by CHK-08)".into()),
+                    failure_code: None,
                 },
                 constraints_applied,
             );
@@ -409,6 +450,7 @@ pub fn chk09_verb_constraints(
                     check_name: "Verb Constraints".into(),
                     result: CheckOutcome::Pass,
                     detail: Some("No constraints defined".into()),
+                    failure_code: None,
                 },
                 constraints_applied,
             );
@@ -428,6 +470,7 @@ pub fn chk09_verb_constraints(
                             "Resource '{}' does not match path_patterns",
                             action.resource
                         )),
+                        failure_code: None,
                     },
                     constraints_applied,
                 );
@@ -452,6 +495,7 @@ pub fn chk09_verb_constraints(
                                 check_name: "Verb Constraints".into(),
                                 result: CheckOutcome::Fail,
                                 detail: Some(format!("Command '{}' not in allowed_commands", cmd)),
+                                failure_code: None,
                             },
                             constraints_applied,
                         );
@@ -472,6 +516,7 @@ pub fn chk09_verb_constraints(
                                 check_name: "Verb Constraints".into(),
                                 result: CheckOutcome::Fail,
                                 detail: Some(format!("Command '{}' in denied_commands", cmd)),
+                                failure_code: None,
                             },
                             constraints_applied,
                         );
@@ -495,6 +540,7 @@ pub fn chk09_verb_constraints(
                                     "File size {} exceeds max {}",
                                     size, max_size
                                 )),
+                                failure_code: None,
                             },
                             constraints_applied,
                         );
@@ -522,6 +568,7 @@ pub fn chk09_verb_constraints(
             check_name: "Verb Constraints".into(),
             result: outcome,
             detail: None,
+            failure_code: None,
         },
         constraints_applied,
     )
@@ -539,6 +586,7 @@ pub fn chk10_platform_permissions(
                 check_name: "Platform Permissions".into(),
                 result: CheckOutcome::Skip,
                 detail: Some("No platform permissions defined".into()),
+                failure_code: None,
             };
         }
     };
@@ -558,6 +606,7 @@ pub fn chk10_platform_permissions(
                                 "Deployment target '{}' not in permitted targets",
                                 action.resource
                             )),
+                            failure_code: None,
                         };
                     }
                 }
@@ -576,6 +625,7 @@ pub fn chk10_platform_permissions(
                         check_name: "Platform Permissions".into(),
                         result: CheckOutcome::Fail,
                         detail: Some("Database write not permitted".into()),
+                        failure_code: None,
                     };
                 }
                 if is_migrate && db.migrate != Some(true) {
@@ -584,6 +634,7 @@ pub fn chk10_platform_permissions(
                         check_name: "Platform Permissions".into(),
                         result: CheckOutcome::Fail,
                         detail: Some("Database migration not permitted".into()),
+                        failure_code: None,
                     };
                 }
                 if is_prod && db.production_access != Some(true) {
@@ -592,6 +643,7 @@ pub fn chk10_platform_permissions(
                         check_name: "Platform Permissions".into(),
                         result: CheckOutcome::Fail,
                         detail: Some("Production database access not permitted".into()),
+                        failure_code: None,
                     };
                 }
             }
@@ -606,6 +658,7 @@ pub fn chk10_platform_permissions(
                         check_name: "Platform Permissions".into(),
                         result: CheckOutcome::Fail,
                         detail: Some("Secret creation not permitted".into()),
+                        failure_code: None,
                     };
                 }
                 if is_read && sp.read != Some(true) {
@@ -614,6 +667,7 @@ pub fn chk10_platform_permissions(
                         check_name: "Platform Permissions".into(),
                         result: CheckOutcome::Fail,
                         detail: Some("Secret read not permitted".into()),
+                        failure_code: None,
                     };
                 }
             }
@@ -626,6 +680,7 @@ pub fn chk10_platform_permissions(
         check_name: "Platform Permissions".into(),
         result: CheckOutcome::Pass,
         detail: None,
+        failure_code: None,
     }
 }
 
@@ -642,6 +697,7 @@ pub fn chk11_transaction_type(
             check_name: "Transaction Type".into(),
             result: CheckOutcome::Skip,
             detail: Some("No transaction restrictions".into()),
+            failure_code: None,
         };
     }
 
@@ -653,6 +709,7 @@ pub fn chk11_transaction_type(
                     check_name: "Transaction Type".into(),
                     result: CheckOutcome::Fail,
                     detail: Some("Transaction-restricted PoA requires transaction_type".into()),
+                    failure_code: None,
                 };
             }
             return CheckResult {
@@ -660,6 +717,7 @@ pub fn chk11_transaction_type(
                 check_name: "Transaction Type".into(),
                 result: CheckOutcome::Pass,
                 detail: None,
+                failure_code: None,
             };
         }
         Some(tt) => tt,
@@ -672,6 +730,7 @@ pub fn chk11_transaction_type(
                 check_name: "Transaction Type".into(),
                 result: CheckOutcome::Fail,
                 detail: Some(format!("Transaction type '{}' not allowed", transaction_type)),
+                failure_code: None,
             };
         }
     }
@@ -688,6 +747,7 @@ pub fn chk11_transaction_type(
                             "Transaction type '{}' not found in transaction_matrix",
                             transaction_type
                         )),
+                        failure_code: None,
                     };
                 }
                 Some(entry) => {
@@ -701,6 +761,7 @@ pub fn chk11_transaction_type(
                                     "Transaction type '{}' explicitly denied in matrix",
                                     transaction_type
                                 )),
+                                failure_code: None,
                             };
                         }
                     }
@@ -719,6 +780,7 @@ pub fn chk11_transaction_type(
                                                     "Transaction amount {} exceeds max {} for type '{}'",
                                                     amount, max, transaction_type
                                                 )),
+                                                failure_code: None,
                                             };
                                         }
                                     }
@@ -737,6 +799,7 @@ pub fn chk11_transaction_type(
                                     "Transaction type '{}' requires approval per matrix",
                                     transaction_type
                                 )),
+                                failure_code: None,
                             };
                         }
                     }
@@ -750,6 +813,7 @@ pub fn chk11_transaction_type(
         check_name: "Transaction Type".into(),
         result: CheckOutcome::Pass,
         detail: None,
+        failure_code: None,
     }
 }
 
@@ -762,6 +826,7 @@ pub fn chk12_decision_type(action: &ActionDescriptor, poa: &PoaCredential) -> Ch
                 check_name: "Decision Type".into(),
                 result: CheckOutcome::Skip,
                 detail: Some("No decision-type restriction".into()),
+                failure_code: None,
             };
         }
     };
@@ -772,6 +837,7 @@ pub fn chk12_decision_type(action: &ActionDescriptor, poa: &PoaCredential) -> Ch
             check_name: "Decision Type".into(),
             result: CheckOutcome::Fail,
             detail: Some("Decision-restricted PoA requires decision_type".into()),
+            failure_code: None,
         },
         Some(dt) => {
             if allowed.contains(dt) {
@@ -780,6 +846,7 @@ pub fn chk12_decision_type(action: &ActionDescriptor, poa: &PoaCredential) -> Ch
                     check_name: "Decision Type".into(),
                     result: CheckOutcome::Pass,
                     detail: None,
+                    failure_code: None,
                 }
             } else {
                 CheckResult {
@@ -787,6 +854,7 @@ pub fn chk12_decision_type(action: &ActionDescriptor, poa: &PoaCredential) -> Ch
                     check_name: "Decision Type".into(),
                     result: CheckOutcome::Fail,
                     detail: Some(format!("Decision type '{}' not permitted", dt)),
+                    failure_code: None,
                 }
             }
         }
@@ -806,6 +874,7 @@ pub fn chk13_budget(
                 check_name: "Budget".into(),
                 result: CheckOutcome::Skip,
                 detail: Some("No budget defined".into()),
+                failure_code: None,
             };
         }
     };
@@ -828,6 +897,7 @@ pub fn chk13_budget(
                 check_name: "Budget".into(),
                 result: CheckOutcome::Pass,
                 detail: Some("No remaining budget tracked".into()),
+                failure_code: None,
             };
         }
     };
@@ -838,6 +908,7 @@ pub fn chk13_budget(
             check_name: "Budget".into(),
             result: CheckOutcome::Fail,
             detail: Some("Budget exhausted".into()),
+            failure_code: None,
         };
     }
 
@@ -865,6 +936,7 @@ pub fn chk13_budget(
                     "Cost {} cents exceeds remaining {} cents",
                     cost, remaining
                 )),
+                failure_code: None,
             };
         }
     }
@@ -874,6 +946,7 @@ pub fn chk13_budget(
         check_name: "Budget".into(),
         result: CheckOutcome::Pass,
         detail: None,
+        failure_code: None,
     }
 }
 
@@ -890,6 +963,7 @@ pub fn chk14_session_limits(
                 check_name: "Session Limits".into(),
                 result: CheckOutcome::Skip,
                 detail: Some("No session limits defined".into()),
+                failure_code: None,
             };
         }
     };
@@ -906,6 +980,7 @@ pub fn chk14_session_limits(
                             "Tool calls used ({}) >= max ({})",
                             used, max
                         )),
+                        failure_code: None,
                     };
                 }
             }
@@ -922,6 +997,7 @@ pub fn chk14_session_limits(
                             "Lines committed ({}) >= max ({})",
                             lines, max_lines
                         )),
+                        failure_code: None,
                     };
                 }
             }
@@ -933,6 +1009,7 @@ pub fn chk14_session_limits(
         check_name: "Session Limits".into(),
         result: CheckOutcome::Pass,
         detail: None,
+        failure_code: None,
     }
 }
 
@@ -946,12 +1023,14 @@ pub fn chk15_approval(
             check_name: "Approval".into(),
             result: CheckOutcome::Pass,
             detail: Some("Autonomous mode — no approval required".into()),
+            failure_code: None,
         },
         ApprovalMode::Supervised => CheckResult {
             check_id: "CHK-15".into(),
             check_name: "Approval".into(),
             result: CheckOutcome::Constrain,
             detail: Some("Supervised mode — action logged for review".into()),
+            failure_code: None,
         },
         ApprovalMode::FourEyes => {
             if let Some(ref chain) = poa.parties.approval_chain {
@@ -961,6 +1040,7 @@ pub fn chk15_approval(
                         check_name: "Approval".into(),
                         result: CheckOutcome::Constrain,
                         detail: Some("Four-eyes approval chain present".into()),
+                        failure_code: None,
                     }
                 } else {
                     CheckResult {
@@ -970,6 +1050,7 @@ pub fn chk15_approval(
                         detail: Some(
                             "Four-eyes mode requires at least 2 approvers in chain".into(),
                         ),
+                        failure_code: None,
                     }
                 }
             } else {
@@ -978,6 +1059,7 @@ pub fn chk15_approval(
                     check_name: "Approval".into(),
                     result: CheckOutcome::Fail,
                     detail: Some("Four-eyes mode requires approval_chain".into()),
+                    failure_code: None,
                 }
             }
         }
@@ -993,6 +1075,7 @@ pub fn chk16_delegation_chain(poa: &PoaCredential) -> CheckResult {
                 check_name: "Delegation Chain".into(),
                 result: CheckOutcome::Skip,
                 detail: Some("No delegation chain".into()),
+                failure_code: None,
             };
         }
     };
@@ -1009,6 +1092,7 @@ pub fn chk16_delegation_chain(poa: &PoaCredential) -> CheckResult {
                 "Delegation depth {} exceeds max {} for profile {:?}",
                 depth, max_depth, poa.scope.governance_profile
             )),
+            failure_code: None,
         };
     }
 
@@ -1020,6 +1104,7 @@ pub fn chk16_delegation_chain(poa: &PoaCredential) -> CheckResult {
                     check_name: "Delegation Chain".into(),
                     result: CheckOutcome::Fail,
                     detail: Some("Delegation depth remaining is 0".into()),
+                    failure_code: None,
                 };
             }
         }
@@ -1030,5 +1115,6 @@ pub fn chk16_delegation_chain(poa: &PoaCredential) -> CheckResult {
         check_name: "Delegation Chain".into(),
         result: CheckOutcome::Pass,
         detail: None,
+        failure_code: None,
     }
 }
