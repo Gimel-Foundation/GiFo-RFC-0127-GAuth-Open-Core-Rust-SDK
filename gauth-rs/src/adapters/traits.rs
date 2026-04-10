@@ -619,3 +619,143 @@ impl DnaIdentityAdapter for NullDnaIdentity {
         })
     }
 }
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct EnrichedDecision {
+    pub decision: crate::pep::Decision,
+    pub risk_score: f64,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub enrichment_metadata: Option<serde_json::Value>,
+}
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct RiskAssessment {
+    pub overall_score: f64,
+    pub factors: Vec<String>,
+}
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct ComplianceResult {
+    pub compliant: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub violations: Option<Vec<String>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub recommendations: Option<Vec<String>>,
+}
+
+pub trait AIEnrichmentAdapter: Send + Sync {
+    fn enrich_enforcement(
+        &self,
+        request: &crate::pep::EnforcementRequest,
+        poa: &crate::types::PoaCredential,
+        decision: &crate::pep::EnforcementDecision,
+    ) -> Result<EnrichedDecision>;
+
+    fn score_risk(
+        &self,
+        request: &crate::pep::EnforcementRequest,
+        poa: &crate::types::PoaCredential,
+    ) -> Result<f64>;
+
+    fn health_check(&self) -> Result<AdapterHealthResult>;
+}
+
+pub trait RiskScoringAdapter: Send + Sync {
+    fn compute_composite_risk(
+        &self,
+        poa: &crate::types::PoaCredential,
+        context: &serde_json::Value,
+    ) -> Result<RiskAssessment>;
+
+    fn health_check(&self) -> Result<AdapterHealthResult>;
+}
+
+pub trait RegulatoryReasoningAdapter: Send + Sync {
+    fn evaluate_compliance(
+        &self,
+        poa: &crate::types::PoaCredential,
+        context: &serde_json::Value,
+    ) -> Result<ComplianceResult>;
+
+    fn health_check(&self) -> Result<AdapterHealthResult>;
+}
+
+pub struct RuleBasedEnrichment;
+
+impl AIEnrichmentAdapter for RuleBasedEnrichment {
+    fn enrich_enforcement(
+        &self,
+        _request: &crate::pep::EnforcementRequest,
+        _poa: &crate::types::PoaCredential,
+        decision: &crate::pep::EnforcementDecision,
+    ) -> Result<EnrichedDecision> {
+        Ok(EnrichedDecision {
+            decision: decision.decision.clone(),
+            risk_score: 0.0,
+            enrichment_metadata: None,
+        })
+    }
+
+    fn score_risk(
+        &self,
+        _request: &crate::pep::EnforcementRequest,
+        _poa: &crate::types::PoaCredential,
+    ) -> Result<f64> {
+        Ok(0.0)
+    }
+
+    fn health_check(&self) -> Result<AdapterHealthResult> {
+        Ok(AdapterHealthResult {
+            healthy: true,
+            latency_ms: 0.0,
+            details: Some("Rule-based enrichment (no AI)".into()),
+        })
+    }
+}
+
+pub struct RuleBasedRiskScoring;
+
+impl RiskScoringAdapter for RuleBasedRiskScoring {
+    fn compute_composite_risk(
+        &self,
+        _poa: &crate::types::PoaCredential,
+        _context: &serde_json::Value,
+    ) -> Result<RiskAssessment> {
+        Ok(RiskAssessment {
+            overall_score: 0.0,
+            factors: vec![],
+        })
+    }
+
+    fn health_check(&self) -> Result<AdapterHealthResult> {
+        Ok(AdapterHealthResult {
+            healthy: true,
+            latency_ms: 0.0,
+            details: Some("Rule-based risk scoring (no AI)".into()),
+        })
+    }
+}
+
+pub struct RuleBasedRegulatoryReasoning;
+
+impl RegulatoryReasoningAdapter for RuleBasedRegulatoryReasoning {
+    fn evaluate_compliance(
+        &self,
+        _poa: &crate::types::PoaCredential,
+        _context: &serde_json::Value,
+    ) -> Result<ComplianceResult> {
+        Ok(ComplianceResult {
+            compliant: true,
+            violations: None,
+            recommendations: None,
+        })
+    }
+
+    fn health_check(&self) -> Result<AdapterHealthResult> {
+        Ok(AdapterHealthResult {
+            healthy: true,
+            latency_ms: 0.0,
+            details: Some("Rule-based regulatory reasoning (no AI)".into()),
+        })
+    }
+}

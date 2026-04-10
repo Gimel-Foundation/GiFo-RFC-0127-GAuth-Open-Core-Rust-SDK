@@ -4,18 +4,15 @@ use crate::adapters::ConnectorSlot;
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
+#[derive(Default)]
 pub enum LicenseType {
     #[serde(rename = "mpl_2_0")]
+    #[default]
     Mpl2_0,
     #[serde(rename = "gimel_tos")]
     GimelTos,
 }
 
-impl Default for LicenseType {
-    fn default() -> Self {
-        LicenseType::Mpl2_0
-    }
-}
 
 impl std::fmt::Display for LicenseType {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -28,18 +25,15 @@ impl std::fmt::Display for LicenseType {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
+#[derive(Default)]
 pub enum ServiceTosStatus {
+    #[default]
     NotRequired,
     Pending,
     Accepted,
     Rejected,
 }
 
-impl Default for ServiceTosStatus {
-    fn default() -> Self {
-        ServiceTosStatus::NotRequired
-    }
-}
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ServiceTosState {
@@ -129,9 +123,7 @@ impl LicenseState {
             return;
         }
         let key = slot.to_string();
-        if !self.service_tos.contains_key(&key) {
-            self.service_tos.insert(key, ServiceTosState::pending());
-        }
+        self.service_tos.entry(key).or_insert_with(ServiceTosState::pending);
     }
 
     pub fn accept_service_tos(
@@ -142,8 +134,7 @@ impl LicenseState {
     ) -> Result<(), String> {
         if !slot.requires_attestation() {
             return Err(format!(
-                "Slot {} does not require service ToS (not Type C)",
-                slot
+                "Slot {slot} does not require service ToS (not Type C)"
             ));
         }
         let key = slot.to_string();
@@ -161,8 +152,7 @@ impl LicenseState {
     pub fn reject_service_tos(&mut self, slot: ConnectorSlot) -> Result<(), String> {
         if !slot.requires_attestation() {
             return Err(format!(
-                "Slot {} does not require service ToS (not Type C)",
-                slot
+                "Slot {slot} does not require service ToS (not Type C)"
             ));
         }
         let key = slot.to_string();

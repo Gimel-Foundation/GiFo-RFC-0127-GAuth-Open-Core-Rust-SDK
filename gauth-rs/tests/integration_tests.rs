@@ -270,8 +270,7 @@ fn test_pep_permit_eu_member_region() {
         assert_eq!(
             decision.decision,
             Decision::Permit,
-            "Expected PERMIT for EU member {}",
-            country
+            "Expected PERMIT for EU member {country}"
         );
     }
 }
@@ -926,7 +925,7 @@ fn test_adapter_registry_rejects_untrusted() {
     assert!(result.is_err());
     match result {
         Err(GAuthError::AdapterSignatureInvalid(_)) => {}
-        other => panic!("Expected AdapterSignatureInvalid, got {:?}", other),
+        other => panic!("Expected AdapterSignatureInvalid, got {other:?}"),
     }
 }
 
@@ -952,7 +951,7 @@ fn test_adapter_registry_rejects_wrong_namespace() {
         Err(GAuthError::AdapterRegistrationFailed(msg)) => {
             assert!(msg.contains("namespace"));
         }
-        other => panic!("Expected AdapterRegistrationFailed, got {:?}", other),
+        other => panic!("Expected AdapterRegistrationFailed, got {other:?}"),
     }
 }
 
@@ -992,7 +991,7 @@ fn test_adapter_registry_list_registered() {
     let registry = AdapterRegistry::new();
     let registered = registry.list_registered();
 
-    assert_eq!(registered.len(), 2);
+    assert_eq!(registered.len(), 5);
     for (_, names) in &registered {
         assert!(names.is_empty());
     }
@@ -1044,6 +1043,29 @@ fn test_adapter_noop_implementations() {
     let resolved = dna.resolve_identity("dna:sample:456").unwrap();
     assert!(resolved.is_none());
     assert!(dna.verify_biometric(&serde_json::json!({})).is_err());
+
+    let enrichment = RuleBasedEnrichment;
+    let poa = make_standard_poa();
+    let req = make_enforcement_request("file.read", "src/main.rs", "agent:test-agent-001");
+    let engine = PepEngine::default();
+    let decision = engine.enforce_action(&req, &poa);
+    let enriched = enrichment
+        .enrich_enforcement(&req, &poa, &decision)
+        .unwrap();
+    assert_eq!(enriched.decision, decision.decision);
+    assert_eq!(enrichment.score_risk(&req, &poa).unwrap(), 0.0);
+
+    let risk = RuleBasedRiskScoring;
+    let assessment = risk
+        .compute_composite_risk(&poa, &serde_json::json!({}))
+        .unwrap();
+    assert_eq!(assessment.overall_score, 0.0);
+
+    let regulatory = RuleBasedRegulatoryReasoning;
+    let compliance = regulatory
+        .evaluate_compliance(&poa, &serde_json::json!({}))
+        .unwrap();
+    assert!(compliance.compliant);
 }
 
 #[test]
@@ -1203,7 +1225,7 @@ fn test_adapter_registry_rejects_collision() {
         Err(GAuthError::AdapterRegistrationFailed(msg)) => {
             assert!(msg.contains("already registered"));
         }
-        other => panic!("Expected AdapterRegistrationFailed collision, got {:?}", other),
+        other => panic!("Expected AdapterRegistrationFailed collision, got {other:?}"),
     }
 }
 
@@ -1657,7 +1679,7 @@ fn test_connector_slot_manifest_temporal_validation() {
         Err(GAuthError::AdapterRegistrationFailed(msg)) => {
             assert!(msg.contains("expired"));
         }
-        other => panic!("Expected expired error, got {:?}", other),
+        other => panic!("Expected expired error, got {other:?}"),
     }
 }
 
@@ -1688,7 +1710,7 @@ fn test_connector_slot_manifest_namespace_binding() {
         Err(GAuthError::AdapterRegistrationFailed(msg)) => {
             assert!(msg.contains("canonical namespace"));
         }
-        other => panic!("Expected namespace binding error, got {:?}", other),
+        other => panic!("Expected namespace binding error, got {other:?}"),
     }
 }
 
@@ -1719,7 +1741,7 @@ fn test_connector_slot_manifest_future_issued_at() {
         Err(GAuthError::AdapterRegistrationFailed(msg)) => {
             assert!(msg.contains("future"));
         }
-        other => panic!("Expected future issued_at error, got {:?}", other),
+        other => panic!("Expected future issued_at error, got {other:?}"),
     }
 }
 
@@ -1750,7 +1772,7 @@ fn test_connector_slot_manifest_exceeds_max_validity() {
         Err(GAuthError::AdapterRegistrationFailed(msg)) => {
             assert!(msg.contains("365 days"));
         }
-        other => panic!("Expected max validity error, got {:?}", other),
+        other => panic!("Expected max validity error, got {other:?}"),
     }
 }
 

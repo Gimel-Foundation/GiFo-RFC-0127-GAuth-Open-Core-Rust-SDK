@@ -11,7 +11,7 @@ pub fn chk01_credential_integrity(
                 check_id: "CHK-01".into(),
                 check_name: "Credential Integrity".into(),
                 result: CheckOutcome::Fail,
-                detail: Some(format!("Unsupported schema_version: {}", ver)),
+                detail: Some(format!("Unsupported schema_version: {ver}")),
                 failure_code: None,
             };
         }
@@ -28,8 +28,7 @@ pub fn chk01_credential_integrity(
                     check_name: "Credential Integrity".into(),
                     result: CheckOutcome::Fail,
                     detail: Some(format!(
-                        "scope_checksum mismatch: snapshot '{}' != live '{}'",
-                        snapshot_checksum, live_checksum
+                        "scope_checksum mismatch: snapshot '{snapshot_checksum}' != live '{live_checksum}'"
                     )),
                     failure_code: None,
                 };
@@ -119,7 +118,7 @@ pub fn chk02_temporal_status(
                             check_id: "CHK-02".into(),
                             check_name: "Temporal & Status".into(),
                             result: CheckOutcome::Fail,
-                            detail: Some(format!("Unknown mandate status: {}", status)),
+                            detail: Some(format!("Unknown mandate status: {status}")),
                             failure_code: Some("CREDENTIAL_EXPIRED".into()),
                         };
                     }
@@ -151,8 +150,7 @@ pub fn chk03_governance_profile(
                     check_name: "Governance Profile".into(),
                     result: CheckOutcome::Fail,
                     detail: Some(format!(
-                        "Auto-deploy not allowed for profile {:?}",
-                        profile
+                        "Auto-deploy not allowed for profile {profile:?}"
                     )),
                     failure_code: None,
                 };
@@ -204,8 +202,7 @@ pub fn chk04_phase(action: &ActionDescriptor, poa: &PoaCredential) -> CheckResul
             check_name: "Phase".into(),
             result: CheckOutcome::Fail,
             detail: Some(format!(
-                "Verb '{}' not permitted in phase {:?}",
-                verb, phase
+                "Verb '{verb}' not permitted in phase {phase:?}"
             )),
             failure_code: None,
         };
@@ -256,7 +253,7 @@ pub fn chk05_sector(action: &ActionDescriptor, poa: &PoaCredential) -> CheckResu
                     check_id: "CHK-05".into(),
                     check_name: "Sector".into(),
                     result: CheckOutcome::Fail,
-                    detail: Some(format!("Sector '{}' not in allowed sectors", sector)),
+                    detail: Some(format!("Sector '{sector}' not in allowed sectors")),
                     failure_code: None,
                 }
             }
@@ -317,7 +314,7 @@ pub fn chk06_region(action: &ActionDescriptor, poa: &PoaCredential) -> CheckResu
                     check_id: "CHK-06".into(),
                     check_name: "Region".into(),
                     result: CheckOutcome::Fail,
-                    detail: Some(format!("Region '{}' not in allowed regions", region)),
+                    detail: Some(format!("Region '{region}' not in allowed regions")),
                     failure_code: None,
                 }
             }
@@ -347,7 +344,7 @@ pub fn chk07_path(action: &ActionDescriptor, poa: &PoaCredential) -> CheckResult
                     check_id: "CHK-07".into(),
                     check_name: "Path".into(),
                     result: CheckOutcome::Fail,
-                    detail: Some(format!("Path '{}' matches denied pattern '{}'", resource, pattern)),
+                    detail: Some(format!("Path '{resource}' matches denied pattern '{pattern}'")),
                     failure_code: None,
                 };
             }
@@ -370,7 +367,7 @@ pub fn chk07_path(action: &ActionDescriptor, poa: &PoaCredential) -> CheckResult
                 check_id: "CHK-07".into(),
                 check_name: "Path".into(),
                 result: CheckOutcome::Fail,
-                detail: Some(format!("Path '{}' not in allowed paths", resource)),
+                detail: Some(format!("Path '{resource}' not in allowed paths")),
                 failure_code: None,
             };
         }
@@ -393,7 +390,7 @@ pub fn chk08_verb_permission(action: &ActionDescriptor, poa: &PoaCredential) -> 
             check_id: "CHK-08".into(),
             check_name: "Verb Permission".into(),
             result: CheckOutcome::Fail,
-            detail: Some(format!("Verb '{}' not registered in core_verbs", verb)),
+            detail: Some(format!("Verb '{verb}' not registered in core_verbs")),
             failure_code: None,
         },
         Some(policy) => {
@@ -410,7 +407,7 @@ pub fn chk08_verb_permission(action: &ActionDescriptor, poa: &PoaCredential) -> 
                     check_id: "CHK-08".into(),
                     check_name: "Verb Permission".into(),
                     result: CheckOutcome::Fail,
-                    detail: Some(format!("Verb '{}' is not allowed", verb)),
+                    detail: Some(format!("Verb '{verb}' is not allowed")),
                     failure_code: None,
                 }
             }
@@ -494,7 +491,7 @@ pub fn chk09_verb_constraints(
                                 check_id: "CHK-09".into(),
                                 check_name: "Verb Constraints".into(),
                                 result: CheckOutcome::Fail,
-                                detail: Some(format!("Command '{}' not in allowed_commands", cmd)),
+                                detail: Some(format!("Command '{cmd}' not in allowed_commands")),
                                 failure_code: None,
                             },
                             constraints_applied,
@@ -515,7 +512,7 @@ pub fn chk09_verb_constraints(
                                 check_id: "CHK-09".into(),
                                 check_name: "Verb Constraints".into(),
                                 result: CheckOutcome::Fail,
-                                detail: Some(format!("Command '{}' in denied_commands", cmd)),
+                                detail: Some(format!("Command '{cmd}' in denied_commands")),
                                 failure_code: None,
                             },
                             constraints_applied,
@@ -537,8 +534,7 @@ pub fn chk09_verb_constraints(
                                 check_name: "Verb Constraints".into(),
                                 result: CheckOutcome::Fail,
                                 detail: Some(format!(
-                                    "File size {} exceeds max {}",
-                                    size, max_size
+                                    "File size {size} exceeds max {max_size}"
                                 )),
                                 failure_code: None,
                             },
@@ -729,7 +725,7 @@ pub fn chk11_transaction_type(
                 check_id: "CHK-11".into(),
                 check_name: "Transaction Type".into(),
                 result: CheckOutcome::Fail,
-                detail: Some(format!("Transaction type '{}' not allowed", transaction_type)),
+                detail: Some(format!("Transaction type '{transaction_type}' not allowed")),
                 failure_code: None,
             };
         }
@@ -744,8 +740,7 @@ pub fn chk11_transaction_type(
                         check_name: "Transaction Type".into(),
                         result: CheckOutcome::Fail,
                         detail: Some(format!(
-                            "Transaction type '{}' not found in transaction_matrix",
-                            transaction_type
+                            "Transaction type '{transaction_type}' not found in transaction_matrix"
                         )),
                         failure_code: None,
                     };
@@ -758,8 +753,7 @@ pub fn chk11_transaction_type(
                                 check_name: "Transaction Type".into(),
                                 result: CheckOutcome::Fail,
                                 detail: Some(format!(
-                                    "Transaction type '{}' explicitly denied in matrix",
-                                    transaction_type
+                                    "Transaction type '{transaction_type}' explicitly denied in matrix"
                                 )),
                                 failure_code: None,
                             };
@@ -777,8 +771,7 @@ pub fn chk11_transaction_type(
                                                 check_name: "Transaction Type".into(),
                                                 result: CheckOutcome::Fail,
                                                 detail: Some(format!(
-                                                    "Transaction amount {} exceeds max {} for type '{}'",
-                                                    amount, max, transaction_type
+                                                    "Transaction amount {amount} exceeds max {max} for type '{transaction_type}'"
                                                 )),
                                                 failure_code: None,
                                             };
@@ -796,8 +789,7 @@ pub fn chk11_transaction_type(
                                 check_name: "Transaction Type".into(),
                                 result: CheckOutcome::Constrain,
                                 detail: Some(format!(
-                                    "Transaction type '{}' requires approval per matrix",
-                                    transaction_type
+                                    "Transaction type '{transaction_type}' requires approval per matrix"
                                 )),
                                 failure_code: None,
                             };
@@ -853,7 +845,7 @@ pub fn chk12_decision_type(action: &ActionDescriptor, poa: &PoaCredential) -> Ch
                     check_id: "CHK-12".into(),
                     check_name: "Decision Type".into(),
                     result: CheckOutcome::Fail,
-                    detail: Some(format!("Decision type '{}' not permitted", dt)),
+                    detail: Some(format!("Decision type '{dt}' not permitted")),
                     failure_code: None,
                 }
             }
@@ -933,8 +925,7 @@ pub fn chk13_budget(
                 check_name: "Budget".into(),
                 result: CheckOutcome::Fail,
                 detail: Some(format!(
-                    "Cost {} cents exceeds remaining {} cents",
-                    cost, remaining
+                    "Cost {cost} cents exceeds remaining {remaining} cents"
                 )),
                 failure_code: None,
             };
@@ -977,8 +968,7 @@ pub fn chk14_session_limits(
                         check_name: "Session Limits".into(),
                         result: CheckOutcome::Fail,
                         detail: Some(format!(
-                            "Tool calls used ({}) >= max ({})",
-                            used, max
+                            "Tool calls used ({used}) >= max ({max})"
                         )),
                         failure_code: None,
                     };
@@ -994,8 +984,7 @@ pub fn chk14_session_limits(
                         check_name: "Session Limits".into(),
                         result: CheckOutcome::Fail,
                         detail: Some(format!(
-                            "Lines committed ({}) >= max ({})",
-                            lines, max_lines
+                            "Lines committed ({lines}) >= max ({max_lines})"
                         )),
                         failure_code: None,
                     };

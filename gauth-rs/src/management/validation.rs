@@ -39,8 +39,7 @@ pub fn validate_mandate_creation(
         if let (Some(total), Some(max)) = (budget.total_cents, profile.max_budget_cents()) {
             if total > max {
                 ceiling_violations.push(format!(
-                    "Budget {} cents exceeds profile {:?} ceiling of {} cents",
-                    total, profile, max
+                    "Budget {total} cents exceeds profile {profile:?} ceiling of {max} cents"
                 ));
             }
         }
@@ -62,16 +61,14 @@ pub fn validate_mandate_creation(
                 for t in targets {
                     if !allowed.contains(&t.as_str()) {
                         ceiling_violations.push(format!(
-                            "Deployment target '{}' not allowed for profile {:?}",
-                            t, profile
+                            "Deployment target '{t}' not allowed for profile {profile:?}"
                         ));
                     }
                 }
             }
             if depl.auto_deploy == Some(true) && !profile.allows_auto_deploy() {
                 ceiling_violations.push(format!(
-                    "Auto-deploy not allowed for profile {:?}",
-                    profile
+                    "Auto-deploy not allowed for profile {profile:?}"
                 ));
             }
         }
@@ -82,21 +79,19 @@ pub fn validate_mandate_creation(
             for p in chain {
                 if denied.contains(p) {
                     consistency_errors.push(format!(
-                        "Path '{}' appears in both allowed_paths and denied_paths",
-                        p
+                        "Path '{p}' appears in both allowed_paths and denied_paths"
                     ));
                 }
             }
         }
     }
 
-    if requirements.approval_mode == ApprovalMode::FourEyes {
-        if parties.approval_chain.as_ref().map(|c| c.len()).unwrap_or(0) < 2 {
+    if requirements.approval_mode == ApprovalMode::FourEyes
+        && parties.approval_chain.as_ref().map(|c| c.len()).unwrap_or(0) < 2 {
             consistency_errors.push(
                 "Four-eyes approval mode requires at least 2 members in approval_chain".into(),
             );
         }
-    }
 
     if scope.phase == Phase::Plan {
         for (verb, policy) in &scope.core_verbs {
@@ -107,8 +102,7 @@ pub fn validate_mandate_creation(
                     || verb.contains("deploy"))
             {
                 consistency_errors.push(format!(
-                    "Write verb '{}' is allowed but phase is 'plan' (read-only)",
-                    verb
+                    "Write verb '{verb}' is allowed but phase is 'plan' (read-only)"
                 ));
             }
         }
@@ -118,8 +112,7 @@ pub fn validate_mandate_creation(
         if let (Some(remaining), Some(total)) = (budget.remaining_cents, budget.total_cents) {
             if remaining > total {
                 consistency_errors.push(format!(
-                    "remaining_cents ({}) > total_cents ({})",
-                    remaining, total
+                    "remaining_cents ({remaining}) > total_cents ({total})"
                 ));
             }
         }
@@ -129,8 +122,7 @@ pub fn validate_mandate_creation(
         for (verb, policy) in &scope.core_verbs {
             if verb.contains("delegate") && policy.allowed {
                 consistency_errors.push(format!(
-                    "Delegation verb '{}' is allowed but profile {:?} does not allow delegation",
-                    verb, profile
+                    "Delegation verb '{verb}' is allowed but profile {profile:?} does not allow delegation"
                 ));
             }
         }

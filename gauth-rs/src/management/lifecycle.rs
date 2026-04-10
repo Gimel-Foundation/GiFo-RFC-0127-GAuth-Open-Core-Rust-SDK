@@ -439,7 +439,7 @@ impl MandateManager {
             performed_by: superseded_by.into(),
             timestamp: now,
             mandate_id: old_mandate_id.to_string(),
-            reason: Some(format!("Superseded by {}", superseded_by)),
+            reason: Some(format!("Superseded by {superseded_by}")),
             details: None,
         });
 

@@ -188,7 +188,7 @@ pub fn check_tariff_gate(slot: ConnectorSlot, tariff: TariffCode) -> TariffGateR
     if availability == SlotAvailability::Null {
         return TariffGateResult {
             allowed: false,
-            reason: Some(format!("Slot {} not available for tariff {}", slot, tariff)),
+            reason: Some(format!("Slot {slot} not available for tariff {tariff}")),
             availability,
             provenance: None,
         };
@@ -457,7 +457,7 @@ impl ConnectorSlotRegistry {
 
         let signature = Signature::from_slice(signature_bytes)
             .map_err(|e| {
-                GAuthError::AdapterSignatureInvalid(format!("Invalid signature format: {}", e))
+                GAuthError::AdapterSignatureInvalid(format!("Invalid signature format: {e}"))
             })?;
 
         let manifest_pub_key_hex = &manifest.public_key;
@@ -487,8 +487,7 @@ impl ConnectorSlotRegistry {
     pub fn unregister(&mut self, slot: ConnectorSlot) -> Result<()> {
         if slot.is_mandatory() {
             return Err(GAuthError::AdapterRegistrationFailed(format!(
-                "Cannot unregister {} — it is mandatory",
-                slot
+                "Cannot unregister {slot} — it is mandatory"
             )));
         }
 
@@ -502,8 +501,7 @@ impl ConnectorSlotRegistry {
     pub fn satisfy_attestation(&mut self, slot: ConnectorSlot) -> Result<()> {
         if !slot.requires_attestation() {
             return Err(GAuthError::AdapterRegistrationFailed(format!(
-                "Slot {} does not require attestation",
-                slot
+                "Slot {slot} does not require attestation"
             )));
         }
 
@@ -523,8 +521,7 @@ impl ConnectorSlotRegistry {
                 let state = self.slot_states.get(slot).unwrap();
                 if state.status == SlotStatus::Null {
                     return Err(GAuthError::AdapterRegistrationFailed(format!(
-                        "Mandatory slot {} is not active",
-                        slot
+                        "Mandatory slot {slot} is not active"
                     )));
                 }
             }
@@ -553,6 +550,9 @@ impl ConnectorSlotRegistry {
 pub enum AdapterType {
     OAuthEngine,
     Foundry,
+    AiEnrichment,
+    RiskScoring,
+    RegulatoryReasoning,
 }
 
 impl std::fmt::Display for AdapterType {
@@ -560,6 +560,9 @@ impl std::fmt::Display for AdapterType {
         match self {
             AdapterType::OAuthEngine => write!(f, "oauth_engine"),
             AdapterType::Foundry => write!(f, "foundry"),
+            AdapterType::AiEnrichment => write!(f, "ai_enrichment"),
+            AdapterType::RiskScoring => write!(f, "risk_scoring"),
+            AdapterType::RegulatoryReasoning => write!(f, "regulatory_reasoning"),
         }
     }
 }
@@ -569,6 +572,9 @@ pub struct AdapterRegistry {
     trusted_namespaces: Vec<String>,
     oauth_engines: HashMap<String, Arc<dyn OAuthEngineAdapter>>,
     foundries: HashMap<String, Arc<dyn FoundryAdapter>>,
+    ai_enrichments: HashMap<String, Arc<dyn AIEnrichmentAdapter>>,
+    risk_scorings: HashMap<String, Arc<dyn RiskScoringAdapter>>,
+    regulatory_reasonings: HashMap<String, Arc<dyn RegulatoryReasoningAdapter>>,
 }
 
 impl Default for AdapterRegistry {
@@ -593,6 +599,9 @@ impl AdapterRegistry {
             trusted_namespaces: vec!["gimel".to_string(), "gimelfoundation".to_string()],
             oauth_engines: HashMap::new(),
             foundries: HashMap::new(),
+            ai_enrichments: HashMap::new(),
+            risk_scorings: HashMap::new(),
+            regulatory_reasonings: HashMap::new(),
         }
     }
 
@@ -614,7 +623,7 @@ impl AdapterRegistry {
 
         let signature = Signature::from_slice(signature_bytes)
             .map_err(|e| {
-                GAuthError::AdapterSignatureInvalid(format!("Invalid signature format: {}", e))
+                GAuthError::AdapterSignatureInvalid(format!("Invalid signature format: {e}"))
             })?;
 
         for key in &self.trusted_keys {
@@ -633,8 +642,7 @@ impl AdapterRegistry {
             Ok(())
         } else {
             Err(GAuthError::AdapterRegistrationFailed(format!(
-                "Namespace '{}' is not in the trusted namespaces list",
-                namespace
+                "Namespace '{namespace}' is not in the trusted namespaces list"
             )))
         }
     }
@@ -643,11 +651,13 @@ impl AdapterRegistry {
         let exists = match adapter_type {
             AdapterType::OAuthEngine => self.oauth_engines.contains_key(name),
             AdapterType::Foundry => self.foundries.contains_key(name),
+            AdapterType::AiEnrichment => self.ai_enrichments.contains_key(name),
+            AdapterType::RiskScoring => self.risk_scorings.contains_key(name),
+            AdapterType::RegulatoryReasoning => self.regulatory_reasonings.contains_key(name),
         };
         if exists {
             Err(GAuthError::AdapterRegistrationFailed(format!(
-                "Adapter '{}' of type {} is already registered; unregister it first",
-                name, adapter_type
+                "Adapter '{name}' of type {adapter_type} is already registered; unregister it first"
             )))
         } else {
             Ok(())
@@ -698,6 +708,76 @@ impl AdapterRegistry {
         self.foundries.get(name)
     }
 
+    pub fn register_ai_enrichment(
+        &mut self,
+        manifest: &LegacyAdapterManifest,
+        signature: &[u8],
+        adapter: Arc<dyn AIEnrichmentAdapter>,
+    ) -> Result<()> {
+        if manifest.adapter_type != AdapterType::AiEnrichment {
+            return Err(GAuthError::AdapterRegistrationFailed(
+                "Manifest adapter_type mismatch".into(),
+            ));
+        }
+        self.check_namespace(&manifest.namespace)?;
+        self.check_no_collision(&manifest.name, &manifest.adapter_type)?;
+        self.verify_manifest(manifest, signature)?;
+        self.ai_enrichments.insert(manifest.name.clone(), adapter);
+        Ok(())
+    }
+
+    pub fn register_risk_scoring(
+        &mut self,
+        manifest: &LegacyAdapterManifest,
+        signature: &[u8],
+        adapter: Arc<dyn RiskScoringAdapter>,
+    ) -> Result<()> {
+        if manifest.adapter_type != AdapterType::RiskScoring {
+            return Err(GAuthError::AdapterRegistrationFailed(
+                "Manifest adapter_type mismatch".into(),
+            ));
+        }
+        self.check_namespace(&manifest.namespace)?;
+        self.check_no_collision(&manifest.name, &manifest.adapter_type)?;
+        self.verify_manifest(manifest, signature)?;
+        self.risk_scorings.insert(manifest.name.clone(), adapter);
+        Ok(())
+    }
+
+    pub fn register_regulatory_reasoning(
+        &mut self,
+        manifest: &LegacyAdapterManifest,
+        signature: &[u8],
+        adapter: Arc<dyn RegulatoryReasoningAdapter>,
+    ) -> Result<()> {
+        if manifest.adapter_type != AdapterType::RegulatoryReasoning {
+            return Err(GAuthError::AdapterRegistrationFailed(
+                "Manifest adapter_type mismatch".into(),
+            ));
+        }
+        self.check_namespace(&manifest.namespace)?;
+        self.check_no_collision(&manifest.name, &manifest.adapter_type)?;
+        self.verify_manifest(manifest, signature)?;
+        self.regulatory_reasonings
+            .insert(manifest.name.clone(), adapter);
+        Ok(())
+    }
+
+    pub fn get_ai_enrichment(&self, name: &str) -> Option<&Arc<dyn AIEnrichmentAdapter>> {
+        self.ai_enrichments.get(name)
+    }
+
+    pub fn get_risk_scoring(&self, name: &str) -> Option<&Arc<dyn RiskScoringAdapter>> {
+        self.risk_scorings.get(name)
+    }
+
+    pub fn get_regulatory_reasoning(
+        &self,
+        name: &str,
+    ) -> Option<&Arc<dyn RegulatoryReasoningAdapter>> {
+        self.regulatory_reasonings.get(name)
+    }
+
     pub fn list_registered(&self) -> Vec<(AdapterType, Vec<String>)> {
         vec![
             (
@@ -707,6 +787,18 @@ impl AdapterRegistry {
             (
                 AdapterType::Foundry,
                 self.foundries.keys().cloned().collect(),
+            ),
+            (
+                AdapterType::AiEnrichment,
+                self.ai_enrichments.keys().cloned().collect(),
+            ),
+            (
+                AdapterType::RiskScoring,
+                self.risk_scorings.keys().cloned().collect(),
+            ),
+            (
+                AdapterType::RegulatoryReasoning,
+                self.regulatory_reasonings.keys().cloned().collect(),
             ),
         ]
     }
