@@ -182,7 +182,7 @@ fn test_pep_deny_wrong_agent() {
 #[test]
 fn test_pep_deny_disallowed_verb() {
     let poa = make_standard_poa();
-    let engine = PepEngine::default();
+    let engine = PepEngine::new(EnforcementMode::Stateful);
 
     let request = make_enforcement_request("deploy", "staging", "agent:test-agent-001");
     let decision = engine.enforce_action(&request, &poa);
@@ -1298,7 +1298,7 @@ fn test_pep_mandate_revoked_uses_correct_code() {
     let decision = engine.enforce_action(&request, &poa);
     assert_eq!(decision.decision, Decision::Deny);
     let violations = decision.violations.unwrap();
-    assert!(violations.iter().any(|v| v.code == "MANDATE_REVOKED"));
+    assert!(violations.iter().any(|v| v.code == "CREDENTIAL_REVOKED"));
 }
 
 #[test]
@@ -1807,4 +1807,104 @@ fn test_pdp_adapter_rule_based() {
     assert!(ceilings.valid);
     let health = pdp.health_check().unwrap();
     assert!(health.healthy);
+}
+
+#[test]
+fn test_pep_stateless_fail_fast() {
+    let poa = make_standard_poa();
+    let engine = PepEngine::new(EnforcementMode::Stateless);
+
+    let mut request = make_enforcement_request("deploy", "staging", "agent:test-agent-001");
+    request.action.verb = "deploy".to_string();
+
+    let decision = engine.enforce_action(&request, &poa);
+    assert_eq!(decision.decision, Decision::Deny);
+    let violations = decision.violations.unwrap();
+    assert_eq!(violations.len(), 1, "Stateless mode should fail-fast with exactly 1 violation");
+    assert_eq!(decision.enforcement_mode, EnforcementMode::Stateless);
+}
+
+#[test]
+fn test_pep_stateful_collects_all() {
+    let poa = make_standard_poa();
+    let engine = PepEngine::new(EnforcementMode::Stateful);
+
+    let request = make_enforcement_request("deploy", "staging", "agent:test-agent-001");
+    let decision = engine.enforce_action(&request, &poa);
+
+    assert_eq!(decision.decision, Decision::Deny);
+    let violations = decision.violations.unwrap();
+    assert!(violations.len() > 1, "Stateful mode should collect all violations, got {}", violations.len());
+    assert_eq!(decision.enforcement_mode, EnforcementMode::Stateful);
+}
+
+#[test]
+fn test_type_c_slot_rejects_unsigned_register() {
+    let mut registry = ConnectorSlotRegistry::new(TariffCode::L);
+    let result = registry.register(ConnectorSlot::AiGovernance, "test-adapter");
+    assert!(result.is_err());
+    let err_msg = format!("{}", result.unwrap_err());
+    assert!(err_msg.contains("sealed manifest"), "Type C slot should require sealed manifest, got: {err_msg}");
+
+    let result2 = registry.register(ConnectorSlot::Web3Identity, "test-adapter");
+    assert!(result2.is_err());
+
+    let result3 = registry.register(ConnectorSlot::DnaIdentity, "test-adapter");
+    assert!(result3.is_err());
+}
+
+#[test]
+fn test_type_ab_slot_allows_unsigned_register() {
+    let mut registry = ConnectorSlotRegistry::new(TariffCode::L);
+    assert!(registry.register(ConnectorSlot::OauthEngine, "oauth-impl").is_ok());
+    assert!(registry.register(ConnectorSlot::Foundry, "foundry-impl").is_ok());
+    assert!(registry.register(ConnectorSlot::Wallet, "wallet-impl").is_ok());
+
+    assert_eq!(registry.slot_status(ConnectorSlot::OauthEngine).status, SlotStatus::Active);
+    assert_eq!(registry.slot_status(ConnectorSlot::Foundry).status, SlotStatus::Active);
+    assert_eq!(registry.slot_status(ConnectorSlot::Wallet).status, SlotStatus::Active);
+}
+
+#[test]
+fn test_chk02_credential_revoked_code() {
+    let poa = make_standard_poa();
+    let engine = PepEngine::new(EnforcementMode::Stateful);
+
+    let mut request = make_enforcement_request("file.read", "src/main.rs", "agent:test-agent-001");
+    request.context = Some(EnforcementContext {
+        session_state: None,
+        live_mandate_state: Some(LiveMandateState {
+            status: Some("revoked".into()),
+            budget_remaining_cents: None,
+            tool_permissions: None,
+            platform_permissions: None,
+        }),
+    });
+
+    let decision = engine.enforce_action(&request, &poa);
+    assert_eq!(decision.decision, Decision::Deny);
+    let violations = decision.violations.unwrap();
+    assert!(violations.iter().any(|v| v.code == "CREDENTIAL_REVOKED"), "Expected CREDENTIAL_REVOKED code");
+}
+
+#[test]
+fn test_chk02_credential_superseded_code() {
+    let poa = make_standard_poa();
+    let engine = PepEngine::new(EnforcementMode::Stateful);
+
+    let mut request = make_enforcement_request("file.read", "src/main.rs", "agent:test-agent-001");
+    request.context = Some(EnforcementContext {
+        session_state: None,
+        live_mandate_state: Some(LiveMandateState {
+            status: Some("superseded".into()),
+            budget_remaining_cents: None,
+            tool_permissions: None,
+            platform_permissions: None,
+        }),
+    });
+
+    let decision = engine.enforce_action(&request, &poa);
+    assert_eq!(decision.decision, Decision::Deny);
+    let violations = decision.violations.unwrap();
+    assert!(violations.iter().any(|v| v.code == "CREDENTIAL_SUPERSEDED"), "Expected CREDENTIAL_SUPERSEDED code");
 }

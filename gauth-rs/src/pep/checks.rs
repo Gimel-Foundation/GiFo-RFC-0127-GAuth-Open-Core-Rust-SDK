@@ -73,8 +73,8 @@ pub fn chk02_temporal_status(
                             check_id: "CHK-02".into(),
                             check_name: "Temporal & Status".into(),
                             result: CheckOutcome::Fail,
-                            detail: Some("Mandate revoked".into()),
-                            failure_code: Some("MANDATE_REVOKED".into()),
+                            detail: Some("Credential revoked".into()),
+                            failure_code: Some("CREDENTIAL_REVOKED".into()),
                         };
                     }
                     "expired" => {
@@ -91,8 +91,8 @@ pub fn chk02_temporal_status(
                             check_id: "CHK-02".into(),
                             check_name: "Temporal & Status".into(),
                             result: CheckOutcome::Fail,
-                            detail: Some("Mandate superseded".into()),
-                            failure_code: Some("MANDATE_SUPERSEDED".into()),
+                            detail: Some("Credential superseded".into()),
+                            failure_code: Some("CREDENTIAL_SUPERSEDED".into()),
                         };
                     }
                     "budget_exceeded" => {

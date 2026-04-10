@@ -33,6 +33,7 @@ impl PepEngine {
         let mut all_checks = Vec::new();
         let mut all_violations = Vec::new();
         let mut all_constraints = Vec::new();
+        let fail_fast = self.mode == EnforcementMode::Stateless;
 
         let chk01 = checks::chk01_credential_integrity(&request.credential, poa);
         collect_result(&chk01, &mut all_violations, "CREDENTIAL_INVALID");
@@ -52,76 +53,127 @@ impl PepEngine {
             }
             all_checks.push(chk02);
 
-            let chk03 = checks::chk03_governance_profile(&request.action, poa);
-            collect_result(&chk03, &mut all_violations, "PROFILE_CEILING_EXCEEDED");
-            all_checks.push(chk03);
-
-            let chk04 = checks::chk04_phase(&request.action, poa);
-            collect_result(&chk04, &mut all_violations, "PHASE_MISMATCH");
-            all_checks.push(chk04);
-
-            let chk05 = checks::chk05_sector(&request.action, poa);
-            collect_result(&chk05, &mut all_violations, "SECTOR_MISMATCH");
-            all_checks.push(chk05);
-
-            let chk06 = checks::chk06_region(&request.action, poa);
-            collect_result(&chk06, &mut all_violations, "REGION_MISMATCH");
-            all_checks.push(chk06);
-
-            let chk07 = checks::chk07_path(&request.action, poa);
-            collect_result(&chk07, &mut all_violations, "PATH_DENIED");
-            all_checks.push(chk07);
-
-            let chk08 = checks::chk08_verb_permission(&request.action, poa);
-            collect_result(&chk08, &mut all_violations, "VERB_NOT_ALLOWED");
-            all_checks.push(chk08);
-
-            let (chk09, c09) = checks::chk09_verb_constraints(&request.action, poa);
-            collect_result(&chk09, &mut all_violations, "CONSTRAINT_VIOLATED");
-            all_constraints.extend(c09);
-            all_checks.push(chk09);
-
-            let chk10 = checks::chk10_platform_permissions(&request.action, poa);
-            collect_result(&chk10, &mut all_violations, "PLATFORM_PERMISSION_DENIED");
-            all_checks.push(chk10);
-
-            let chk11 = checks::chk11_transaction_type(&request.action, poa);
-            collect_result(&chk11, &mut all_violations, "TRANSACTION_NOT_ALLOWED");
-            all_checks.push(chk11);
-
-            let chk12 = checks::chk12_decision_type(&request.action, poa);
-            collect_result(&chk12, &mut all_violations, "DECISION_NOT_ALLOWED");
-            all_checks.push(chk12);
-
-            let chk13 = checks::chk13_budget(
-                &request.action, poa, request.context.as_ref(),
-            );
-            collect_result(&chk13, &mut all_violations, "BUDGET_EXCEEDED");
-            all_checks.push(chk13);
-
-            let chk14 = checks::chk14_session_limits(
-                &request.action, poa, request.context.as_ref(),
-            );
-            collect_result(&chk14, &mut all_violations, "SESSION_LIMIT_EXCEEDED");
-            all_checks.push(chk14);
-
-            let chk15 = checks::chk15_approval(&request.action, poa);
-            collect_result(&chk15, &mut all_violations, "APPROVAL_REQUIRED");
-            if chk15.result == CheckOutcome::Constrain {
-                all_constraints.push(EnforcedConstraint {
-                    constraint_type: "approval_logged".into(),
-                    check_id: "CHK-15".into(),
-                    requested: serde_json::Value::String(
-                        format!("{:?}", poa.requirements.approval_mode),
-                    ),
-                    enforced: serde_json::Value::String("supervised".into()),
-                });
+            if !fail_fast || all_violations.is_empty() {
+                run_simple_check(
+                    checks::chk03_governance_profile(&request.action, poa),
+                    "PROFILE_CEILING_EXCEEDED",
+                    &mut all_checks,
+                    &mut all_violations,
+                );
             }
-            all_checks.push(chk15);
-
-            let chk16 = checks::chk16_delegation_chain(poa);
-            collect_result(&chk16, &mut all_violations, "DELEGATION_DEPTH_EXCEEDED");
-            all_checks.push(chk16);
+            if !fail_fast || all_violations.is_empty() {
+                run_simple_check(
+                    checks::chk04_phase(&request.action, poa),
+                    "PHASE_MISMATCH",
+                    &mut all_checks,
+                    &mut all_violations,
+                );
+            }
+            if !fail_fast || all_violations.is_empty() {
+                run_simple_check(
+                    checks::chk05_sector(&request.action, poa),
+                    "SECTOR_MISMATCH",
+                    &mut all_checks,
+                    &mut all_violations,
+                );
+            }
+            if !fail_fast || all_violations.is_empty() {
+                run_simple_check(
+                    checks::chk06_region(&request.action, poa),
+                    "REGION_MISMATCH",
+                    &mut all_checks,
+                    &mut all_violations,
+                );
+            }
+            if !fail_fast || all_violations.is_empty() {
+                run_simple_check(
+                    checks::chk07_path(&request.action, poa),
+                    "PATH_DENIED",
+                    &mut all_checks,
+                    &mut all_violations,
+                );
+            }
+            if !fail_fast || all_violations.is_empty() {
+                run_simple_check(
+                    checks::chk08_verb_permission(&request.action, poa),
+                    "VERB_NOT_ALLOWED",
+                    &mut all_checks,
+                    &mut all_violations,
+                );
+            }
+            if !fail_fast || all_violations.is_empty() {
+                let (chk09, c09) = checks::chk09_verb_constraints(&request.action, poa);
+                collect_result(&chk09, &mut all_violations, "CONSTRAINT_VIOLATED");
+                all_constraints.extend(c09);
+                all_checks.push(chk09);
+            }
+            if !fail_fast || all_violations.is_empty() {
+                run_simple_check(
+                    checks::chk10_platform_permissions(&request.action, poa),
+                    "PLATFORM_PERMISSION_DENIED",
+                    &mut all_checks,
+                    &mut all_violations,
+                );
+            }
+            if !fail_fast || all_violations.is_empty() {
+                run_simple_check(
+                    checks::chk11_transaction_type(&request.action, poa),
+                    "TRANSACTION_NOT_ALLOWED",
+                    &mut all_checks,
+                    &mut all_violations,
+                );
+            }
+            if !fail_fast || all_violations.is_empty() {
+                run_simple_check(
+                    checks::chk12_decision_type(&request.action, poa),
+                    "DECISION_NOT_ALLOWED",
+                    &mut all_checks,
+                    &mut all_violations,
+                );
+            }
+            if !fail_fast || all_violations.is_empty() {
+                run_simple_check(
+                    checks::chk13_budget(
+                        &request.action, poa, request.context.as_ref(),
+                    ),
+                    "BUDGET_EXCEEDED",
+                    &mut all_checks,
+                    &mut all_violations,
+                );
+            }
+            if !fail_fast || all_violations.is_empty() {
+                run_simple_check(
+                    checks::chk14_session_limits(
+                        &request.action, poa, request.context.as_ref(),
+                    ),
+                    "SESSION_LIMIT_EXCEEDED",
+                    &mut all_checks,
+                    &mut all_violations,
+                );
+            }
+            if !fail_fast || all_violations.is_empty() {
+                let chk15 = checks::chk15_approval(&request.action, poa);
+                collect_result(&chk15, &mut all_violations, "APPROVAL_REQUIRED");
+                if chk15.result == CheckOutcome::Constrain {
+                    all_constraints.push(EnforcedConstraint {
+                        constraint_type: "approval_logged".into(),
+                        check_id: "CHK-15".into(),
+                        requested: serde_json::Value::String(
+                            format!("{:?}", poa.requirements.approval_mode),
+                        ),
+                        enforced: serde_json::Value::String("supervised".into()),
+                    });
+                }
+                all_checks.push(chk15);
+            }
+            if !fail_fast || all_violations.is_empty() {
+                run_simple_check(
+                    checks::chk16_delegation_chain(poa),
+                    "DELEGATION_DEPTH_EXCEEDED",
+                    &mut all_checks,
+                    &mut all_violations,
+                );
+            }
         }
 
         let elapsed = start.elapsed();
@@ -268,6 +320,16 @@ impl PepEngine {
             },
         }
     }
+}
+
+fn run_simple_check(
+    check: CheckResult,
+    code: &str,
+    all_checks: &mut Vec<CheckResult>,
+    all_violations: &mut Vec<Violation>,
+) {
+    collect_result(&check, all_violations, code);
+    all_checks.push(check);
 }
 
 fn collect_result(check: &CheckResult, violations: &mut Vec<Violation>, code: &str) {

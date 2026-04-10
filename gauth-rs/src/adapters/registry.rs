@@ -324,6 +324,12 @@ impl ConnectorSlotRegistry {
         slot: ConnectorSlot,
         implementation_label: &str,
     ) -> Result<()> {
+        if slot.requires_attestation() {
+            return Err(GAuthError::AdapterRegistrationFailed(format!(
+                "Type C slot {slot} requires sealed manifest registration via register_with_manifest()"
+            )));
+        }
+
         let gate = check_tariff_gate(slot, self.tariff);
         if !gate.allowed {
             return Err(GAuthError::AdapterRegistrationFailed(
@@ -332,13 +338,6 @@ impl ConnectorSlotRegistry {
         }
 
         let state = self.slot_states.get_mut(&slot).unwrap();
-
-        if slot.requires_attestation() && !state.attestation_satisfied {
-            state.status = SlotStatus::Pending;
-            state.implementation_label = implementation_label.to_string();
-            return Ok(());
-        }
-
         state.status = SlotStatus::Active;
         state.implementation_label = implementation_label.to_string();
         Ok(())
@@ -498,12 +497,19 @@ impl ConnectorSlotRegistry {
         Ok(())
     }
 
-    pub fn satisfy_attestation(&mut self, slot: ConnectorSlot) -> Result<()> {
+    pub fn satisfy_attestation(
+        &mut self,
+        slot: ConnectorSlot,
+        manifest: &AdapterManifest,
+        signature_bytes: &[u8],
+    ) -> Result<()> {
         if !slot.requires_attestation() {
             return Err(GAuthError::AdapterRegistrationFailed(format!(
                 "Slot {slot} does not require attestation"
             )));
         }
+
+        self.verify_manifest(slot, manifest, signature_bytes)?;
 
         let state = self.slot_states.get_mut(&slot).unwrap();
         state.attestation_satisfied = true;
