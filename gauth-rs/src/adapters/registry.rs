@@ -391,10 +391,12 @@ impl ConnectorSlotRegistry {
             )));
         }
 
-        if !manifest.namespace.starts_with("@gimel/") {
+        if manifest.namespace != slot.canonical_namespace() {
             return Err(GAuthError::AdapterRegistrationFailed(format!(
-                "Namespace '{}' must start with '@gimel/'",
-                manifest.namespace
+                "Namespace '{}' must match canonical namespace '{}' for slot {}",
+                manifest.namespace,
+                slot.canonical_namespace(),
+                slot
             )));
         }
 
@@ -403,6 +405,33 @@ impl ConnectorSlotRegistry {
                 "Issuer must be 'gimel-foundation', got '{}'",
                 manifest.issuer
             )));
+        }
+
+        if let (Ok(issued), Ok(expires)) = (
+            chrono::DateTime::parse_from_rfc3339(&manifest.issued_at),
+            chrono::DateTime::parse_from_rfc3339(&manifest.expires_at),
+        ) {
+            let now = chrono::Utc::now();
+            if issued > now {
+                return Err(GAuthError::AdapterRegistrationFailed(
+                    "Manifest issued_at is in the future".into(),
+                ));
+            }
+            if expires < now {
+                return Err(GAuthError::AdapterRegistrationFailed(
+                    "Manifest has expired (expires_at is in the past)".into(),
+                ));
+            }
+            let max_validity = chrono::Duration::days(365);
+            if expires - issued > max_validity {
+                return Err(GAuthError::AdapterRegistrationFailed(
+                    "Manifest validity exceeds maximum of 365 days".into(),
+                ));
+            }
+        } else {
+            return Err(GAuthError::AdapterRegistrationFailed(
+                "issued_at and expires_at must be valid RFC3339 timestamps".into(),
+            ));
         }
 
         if self.revoked_versions.contains(&manifest.adapter_version) {
@@ -420,23 +449,39 @@ impl ConnectorSlotRegistry {
 
         let mut manifest_for_verify = manifest.clone();
         manifest_for_verify.signature = None;
-        let manifest_json = serde_json::to_vec(&manifest_for_verify)
-            .map_err(|e| GAuthError::AdapterSignatureInvalid(e.to_string()))?;
+        let canonical_json = crate::crypto::canonical_json(
+            &serde_json::to_value(&manifest_for_verify)
+                .map_err(|e| GAuthError::AdapterSignatureInvalid(e.to_string()))?,
+        );
+        let manifest_bytes = canonical_json.as_bytes();
 
         let signature = Signature::from_slice(signature_bytes)
             .map_err(|e| {
                 GAuthError::AdapterSignatureInvalid(format!("Invalid signature format: {}", e))
             })?;
 
+        let manifest_pub_key_hex = &manifest.public_key;
+        let mut verified = false;
         for key in &self.trusted_keys {
-            if key.verify(&manifest_json, &signature).is_ok() {
-                return Ok(());
+            if key.verify(manifest_bytes, &signature).is_ok() {
+                let key_hex = hex::encode(key.as_bytes());
+                if key_hex == *manifest_pub_key_hex {
+                    verified = true;
+                    break;
+                }
+                return Err(GAuthError::AdapterSignatureInvalid(
+                    "Signature valid but verifying key does not match manifest public_key".into(),
+                ));
             }
         }
 
-        Err(GAuthError::AdapterSignatureInvalid(
-            "No trusted key verified the adapter manifest signature".into(),
-        ))
+        if !verified {
+            return Err(GAuthError::AdapterSignatureInvalid(
+                "No trusted key verified the adapter manifest signature".into(),
+            ));
+        }
+
+        Ok(())
     }
 
     pub fn unregister(&mut self, slot: ConnectorSlot) -> Result<()> {
@@ -508,9 +553,6 @@ impl ConnectorSlotRegistry {
 pub enum AdapterType {
     OAuthEngine,
     Foundry,
-    AiEnrichment,
-    RiskScoring,
-    RegulatoryReasoning,
 }
 
 impl std::fmt::Display for AdapterType {
@@ -518,9 +560,6 @@ impl std::fmt::Display for AdapterType {
         match self {
             AdapterType::OAuthEngine => write!(f, "oauth_engine"),
             AdapterType::Foundry => write!(f, "foundry"),
-            AdapterType::AiEnrichment => write!(f, "ai_enrichment"),
-            AdapterType::RiskScoring => write!(f, "risk_scoring"),
-            AdapterType::RegulatoryReasoning => write!(f, "regulatory_reasoning"),
         }
     }
 }
@@ -604,7 +643,6 @@ impl AdapterRegistry {
         let exists = match adapter_type {
             AdapterType::OAuthEngine => self.oauth_engines.contains_key(name),
             AdapterType::Foundry => self.foundries.contains_key(name),
-            _ => false,
         };
         if exists {
             Err(GAuthError::AdapterRegistrationFailed(format!(

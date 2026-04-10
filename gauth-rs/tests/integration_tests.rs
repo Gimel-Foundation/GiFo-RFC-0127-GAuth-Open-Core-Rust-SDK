@@ -1624,6 +1624,137 @@ fn test_connector_slot_registry_tariff_enforcement() {
 }
 
 #[test]
+fn test_connector_slot_manifest_temporal_validation() {
+    use ed25519_dalek::SigningKey;
+
+    let mut rng = rand::thread_rng();
+    let signing_key = SigningKey::generate(&mut rng);
+    let verifying_key = signing_key.verifying_key();
+
+    let mut registry = ConnectorSlotRegistry::new(TariffCode::L);
+    registry.add_trusted_key(verifying_key);
+
+    let expired_manifest = AdapterManifest {
+        manifest_version: "1.0".into(),
+        adapter_name: "test-gov".into(),
+        adapter_type: "C".into(),
+        adapter_version: "1.0.0".into(),
+        slot_name: "ai_governance".into(),
+        namespace: "@gimel/ai-governance".into(),
+        issued_at: "2020-01-01T00:00:00Z".into(),
+        expires_at: "2020-06-01T00:00:00Z".into(),
+        issuer: "gimel-foundation".into(),
+        capabilities: None,
+        checksum: None,
+        public_key: hex::encode(verifying_key.as_bytes()),
+        signature: None,
+    };
+
+    let fake_sig = vec![0u8; 64];
+    let result = registry.verify_manifest(ConnectorSlot::AiGovernance, &expired_manifest, &fake_sig);
+    assert!(result.is_err());
+    match result {
+        Err(GAuthError::AdapterRegistrationFailed(msg)) => {
+            assert!(msg.contains("expired"));
+        }
+        other => panic!("Expected expired error, got {:?}", other),
+    }
+}
+
+#[test]
+fn test_connector_slot_manifest_namespace_binding() {
+    let registry = ConnectorSlotRegistry::new(TariffCode::L);
+
+    let manifest = AdapterManifest {
+        manifest_version: "1.0".into(),
+        adapter_name: "test-gov".into(),
+        adapter_type: "C".into(),
+        adapter_version: "1.0.0".into(),
+        slot_name: "ai_governance".into(),
+        namespace: "@gimel/wrong-namespace".into(),
+        issued_at: chrono::Utc::now().to_rfc3339(),
+        expires_at: (chrono::Utc::now() + chrono::Duration::days(30)).to_rfc3339(),
+        issuer: "gimel-foundation".into(),
+        capabilities: None,
+        checksum: None,
+        public_key: "deadbeef".into(),
+        signature: None,
+    };
+
+    let fake_sig = vec![0u8; 64];
+    let result = registry.verify_manifest(ConnectorSlot::AiGovernance, &manifest, &fake_sig);
+    assert!(result.is_err());
+    match result {
+        Err(GAuthError::AdapterRegistrationFailed(msg)) => {
+            assert!(msg.contains("canonical namespace"));
+        }
+        other => panic!("Expected namespace binding error, got {:?}", other),
+    }
+}
+
+#[test]
+fn test_connector_slot_manifest_future_issued_at() {
+    let registry = ConnectorSlotRegistry::new(TariffCode::L);
+
+    let manifest = AdapterManifest {
+        manifest_version: "1.0".into(),
+        adapter_name: "test-gov".into(),
+        adapter_type: "C".into(),
+        adapter_version: "1.0.0".into(),
+        slot_name: "ai_governance".into(),
+        namespace: "@gimel/ai-governance".into(),
+        issued_at: (chrono::Utc::now() + chrono::Duration::days(1)).to_rfc3339(),
+        expires_at: (chrono::Utc::now() + chrono::Duration::days(30)).to_rfc3339(),
+        issuer: "gimel-foundation".into(),
+        capabilities: None,
+        checksum: None,
+        public_key: "deadbeef".into(),
+        signature: None,
+    };
+
+    let fake_sig = vec![0u8; 64];
+    let result = registry.verify_manifest(ConnectorSlot::AiGovernance, &manifest, &fake_sig);
+    assert!(result.is_err());
+    match result {
+        Err(GAuthError::AdapterRegistrationFailed(msg)) => {
+            assert!(msg.contains("future"));
+        }
+        other => panic!("Expected future issued_at error, got {:?}", other),
+    }
+}
+
+#[test]
+fn test_connector_slot_manifest_exceeds_max_validity() {
+    let registry = ConnectorSlotRegistry::new(TariffCode::L);
+
+    let manifest = AdapterManifest {
+        manifest_version: "1.0".into(),
+        adapter_name: "test-gov".into(),
+        adapter_type: "C".into(),
+        adapter_version: "1.0.0".into(),
+        slot_name: "ai_governance".into(),
+        namespace: "@gimel/ai-governance".into(),
+        issued_at: (chrono::Utc::now() - chrono::Duration::days(1)).to_rfc3339(),
+        expires_at: (chrono::Utc::now() + chrono::Duration::days(400)).to_rfc3339(),
+        issuer: "gimel-foundation".into(),
+        capabilities: None,
+        checksum: None,
+        public_key: "deadbeef".into(),
+        signature: None,
+    };
+
+    let fake_sig = vec![0u8; 64];
+    let result = registry.verify_manifest(ConnectorSlot::AiGovernance, &manifest, &fake_sig);
+    assert!(result.is_err());
+    match result {
+        Err(GAuthError::AdapterRegistrationFailed(msg)) => {
+            assert!(msg.contains("365 days"));
+        }
+        other => panic!("Expected max validity error, got {:?}", other),
+    }
+}
+
+#[test]
 fn test_billing_adapter_noop() {
     let billing = NoOpBilling;
     assert!(billing.check_credits("tenant_1", "op").is_err());
