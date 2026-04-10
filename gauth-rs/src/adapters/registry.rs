@@ -7,13 +7,500 @@ use serde::{Deserialize, Serialize};
 use crate::error::{GAuthError, Result};
 use super::traits::*;
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ConnectorSlot {
+    Pdp,
+    OauthEngine,
+    Foundry,
+    Wallet,
+    AiGovernance,
+    Web3Identity,
+    DnaIdentity,
+}
+
+impl ConnectorSlot {
+    pub fn slot_number(&self) -> u8 {
+        match self {
+            ConnectorSlot::Pdp => 1,
+            ConnectorSlot::OauthEngine => 2,
+            ConnectorSlot::Foundry => 3,
+            ConnectorSlot::Wallet => 4,
+            ConnectorSlot::AiGovernance => 5,
+            ConnectorSlot::Web3Identity => 6,
+            ConnectorSlot::DnaIdentity => 7,
+        }
+    }
+
+    pub fn is_mandatory(&self) -> bool {
+        matches!(self, ConnectorSlot::Pdp | ConnectorSlot::OauthEngine)
+    }
+
+    pub fn adapter_type_class(&self) -> AdapterTypeClass {
+        match self {
+            ConnectorSlot::Pdp => AdapterTypeClass::Internal,
+            ConnectorSlot::OauthEngine => AdapterTypeClass::A,
+            ConnectorSlot::Foundry | ConnectorSlot::Wallet => AdapterTypeClass::B,
+            ConnectorSlot::AiGovernance
+            | ConnectorSlot::Web3Identity
+            | ConnectorSlot::DnaIdentity => AdapterTypeClass::C,
+        }
+    }
+
+    pub fn requires_attestation(&self) -> bool {
+        self.adapter_type_class() == AdapterTypeClass::C
+    }
+
+    pub fn canonical_namespace(&self) -> &'static str {
+        match self {
+            ConnectorSlot::Pdp => "@gimel/pdp",
+            ConnectorSlot::OauthEngine => "@gimel/oauth-engine",
+            ConnectorSlot::Foundry => "@gimel/foundry",
+            ConnectorSlot::Wallet => "@gimel/wallet",
+            ConnectorSlot::AiGovernance => "@gimel/ai-governance",
+            ConnectorSlot::Web3Identity => "@gimel/web3-identity",
+            ConnectorSlot::DnaIdentity => "@gimel/dna-identity",
+        }
+    }
+
+    pub fn all() -> &'static [ConnectorSlot] {
+        &[
+            ConnectorSlot::Pdp,
+            ConnectorSlot::OauthEngine,
+            ConnectorSlot::Foundry,
+            ConnectorSlot::Wallet,
+            ConnectorSlot::AiGovernance,
+            ConnectorSlot::Web3Identity,
+            ConnectorSlot::DnaIdentity,
+        ]
+    }
+}
+
+impl std::fmt::Display for ConnectorSlot {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            ConnectorSlot::Pdp => write!(f, "pdp"),
+            ConnectorSlot::OauthEngine => write!(f, "oauth_engine"),
+            ConnectorSlot::Foundry => write!(f, "foundry"),
+            ConnectorSlot::Wallet => write!(f, "wallet"),
+            ConnectorSlot::AiGovernance => write!(f, "ai_governance"),
+            ConnectorSlot::Web3Identity => write!(f, "web3_identity"),
+            ConnectorSlot::DnaIdentity => write!(f, "dna_identity"),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub enum AdapterTypeClass {
+    Internal,
+    A,
+    B,
+    C,
+    D,
+}
+
+impl std::fmt::Display for AdapterTypeClass {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            AdapterTypeClass::Internal => write!(f, "Internal"),
+            AdapterTypeClass::A => write!(f, "A"),
+            AdapterTypeClass::B => write!(f, "B"),
+            AdapterTypeClass::C => write!(f, "C"),
+            AdapterTypeClass::D => write!(f, "D"),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum TariffCode {
+    O,
+    S,
+    M,
+    L,
+}
+
+impl std::fmt::Display for TariffCode {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            TariffCode::O => write!(f, "O"),
+            TariffCode::S => write!(f, "S"),
+            TariffCode::M => write!(f, "M"),
+            TariffCode::L => write!(f, "L"),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum SlotAvailability {
+    ActiveAlways,
+    GimelOrUser,
+    UserProvidedRequired,
+    NullOrUser,
+    AttestedGimel,
+    NullOrAttestedGimel,
+    Null,
+}
+
+pub fn slot_availability(slot: ConnectorSlot, tariff: TariffCode) -> SlotAvailability {
+    match (slot, tariff) {
+        (ConnectorSlot::Pdp, _) => SlotAvailability::ActiveAlways,
+
+        (ConnectorSlot::OauthEngine, TariffCode::O) => SlotAvailability::UserProvidedRequired,
+        (ConnectorSlot::OauthEngine, _) => SlotAvailability::GimelOrUser,
+
+        (ConnectorSlot::Foundry, TariffCode::O) => SlotAvailability::NullOrUser,
+        (ConnectorSlot::Foundry, _) => SlotAvailability::GimelOrUser,
+
+        (ConnectorSlot::Wallet, TariffCode::O) => SlotAvailability::NullOrUser,
+        (ConnectorSlot::Wallet, _) => SlotAvailability::GimelOrUser,
+
+        (ConnectorSlot::AiGovernance, TariffCode::O | TariffCode::S) => SlotAvailability::Null,
+        (ConnectorSlot::AiGovernance, TariffCode::M | TariffCode::L) => {
+            SlotAvailability::AttestedGimel
+        }
+
+        (ConnectorSlot::Web3Identity, TariffCode::O | TariffCode::S) => SlotAvailability::Null,
+        (ConnectorSlot::Web3Identity, TariffCode::M) => SlotAvailability::NullOrAttestedGimel,
+        (ConnectorSlot::Web3Identity, TariffCode::L) => SlotAvailability::AttestedGimel,
+
+        (ConnectorSlot::DnaIdentity, TariffCode::O | TariffCode::S | TariffCode::M) => {
+            SlotAvailability::Null
+        }
+        (ConnectorSlot::DnaIdentity, TariffCode::L) => SlotAvailability::AttestedGimel,
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TariffGateResult {
+    pub allowed: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub reason: Option<String>,
+    pub availability: SlotAvailability,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub provenance: Option<String>,
+}
+
+pub fn check_tariff_gate(slot: ConnectorSlot, tariff: TariffCode) -> TariffGateResult {
+    let availability = slot_availability(slot, tariff);
+
+    if availability == SlotAvailability::Null {
+        return TariffGateResult {
+            allowed: false,
+            reason: Some(format!("Slot {} not available for tariff {}", slot, tariff)),
+            availability,
+            provenance: None,
+        };
+    }
+
+    if slot.adapter_type_class() == AdapterTypeClass::C
+        && matches!(tariff, TariffCode::O | TariffCode::S)
+    {
+        return TariffGateResult {
+            allowed: false,
+            reason: Some("Type C requires tariff M or higher".into()),
+            availability,
+            provenance: None,
+        };
+    }
+
+    let provenance = match availability {
+        SlotAvailability::ActiveAlways => "gimel_managed",
+        SlotAvailability::GimelOrUser => "gimel_or_user",
+        SlotAvailability::UserProvidedRequired => "user_must_provide",
+        SlotAvailability::NullOrUser => "user_optional",
+        SlotAvailability::AttestedGimel => "attested_gimel",
+        SlotAvailability::NullOrAttestedGimel => "null_fallback_until_attested",
+        SlotAvailability::Null => unreachable!(),
+    };
+
+    TariffGateResult {
+        allowed: true,
+        reason: None,
+        availability,
+        provenance: Some(provenance.into()),
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum SlotStatus {
+    Null,
+    Pending,
+    Active,
+    Error,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SlotState {
+    pub slot: ConnectorSlot,
+    pub status: SlotStatus,
+    pub implementation_label: String,
+    pub attestation_satisfied: bool,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AdapterManifest {
-    pub name: String,
-    pub version: String,
+    pub manifest_version: String,
+    pub adapter_name: String,
+    pub adapter_type: String,
+    pub adapter_version: String,
+    pub slot_name: String,
     pub namespace: String,
-    pub description: String,
-    pub adapter_type: AdapterType,
+    pub issued_at: String,
+    pub expires_at: String,
+    pub issuer: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub capabilities: Option<Vec<String>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub checksum: Option<String>,
+    pub public_key: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub signature: Option<String>,
+}
+
+pub struct ConnectorSlotRegistry {
+    trusted_keys: Vec<VerifyingKey>,
+    revoked_keys: Vec<String>,
+    revoked_versions: Vec<String>,
+    slot_states: HashMap<ConnectorSlot, SlotState>,
+    tariff: TariffCode,
+}
+
+impl Default for ConnectorSlotRegistry {
+    fn default() -> Self {
+        Self::new(TariffCode::O)
+    }
+}
+
+impl ConnectorSlotRegistry {
+    pub fn new(tariff: TariffCode) -> Self {
+        let mut slot_states = HashMap::new();
+        for slot in ConnectorSlot::all() {
+            let (status, label) = if *slot == ConnectorSlot::Pdp {
+                (SlotStatus::Active, "embedded-rule-based".to_string())
+            } else {
+                (SlotStatus::Null, "None".to_string())
+            };
+            slot_states.insert(
+                *slot,
+                SlotState {
+                    slot: *slot,
+                    status,
+                    implementation_label: label,
+                    attestation_satisfied: *slot == ConnectorSlot::Pdp,
+                },
+            );
+        }
+
+        Self {
+            trusted_keys: Vec::new(),
+            revoked_keys: Vec::new(),
+            revoked_versions: Vec::new(),
+            slot_states,
+            tariff,
+        }
+    }
+
+    pub fn add_trusted_key(&mut self, key: VerifyingKey) {
+        self.trusted_keys.push(key);
+    }
+
+    pub fn add_revoked_key(&mut self, key_hex: String) {
+        self.revoked_keys.push(key_hex);
+    }
+
+    pub fn add_revoked_version(&mut self, version: String) {
+        self.revoked_versions.push(version);
+    }
+
+    pub fn tariff(&self) -> TariffCode {
+        self.tariff
+    }
+
+    pub fn register(
+        &mut self,
+        slot: ConnectorSlot,
+        implementation_label: &str,
+    ) -> Result<()> {
+        let gate = check_tariff_gate(slot, self.tariff);
+        if !gate.allowed {
+            return Err(GAuthError::AdapterRegistrationFailed(
+                gate.reason.unwrap_or_else(|| "Tariff gate blocked".into()),
+            ));
+        }
+
+        let state = self.slot_states.get_mut(&slot).unwrap();
+
+        if slot.requires_attestation() && !state.attestation_satisfied {
+            state.status = SlotStatus::Pending;
+            state.implementation_label = implementation_label.to_string();
+            return Ok(());
+        }
+
+        state.status = SlotStatus::Active;
+        state.implementation_label = implementation_label.to_string();
+        Ok(())
+    }
+
+    pub fn register_with_manifest(
+        &mut self,
+        slot: ConnectorSlot,
+        manifest: &AdapterManifest,
+        signature_bytes: &[u8],
+    ) -> Result<()> {
+        let gate = check_tariff_gate(slot, self.tariff);
+        if !gate.allowed {
+            return Err(GAuthError::AdapterRegistrationFailed(
+                gate.reason.unwrap_or_else(|| "Tariff gate blocked".into()),
+            ));
+        }
+
+        self.verify_manifest(slot, manifest, signature_bytes)?;
+
+        let state = self.slot_states.get_mut(&slot).unwrap();
+        state.status = SlotStatus::Active;
+        state.attestation_satisfied = true;
+        state.implementation_label = manifest.adapter_name.clone();
+        Ok(())
+    }
+
+    pub fn verify_manifest(
+        &self,
+        slot: ConnectorSlot,
+        manifest: &AdapterManifest,
+        signature_bytes: &[u8],
+    ) -> Result<()> {
+        if manifest.manifest_version != "1.0" {
+            return Err(GAuthError::AdapterRegistrationFailed(
+                "manifest_version must be '1.0'".into(),
+            ));
+        }
+
+        if manifest.adapter_type != "C" {
+            return Err(GAuthError::AdapterRegistrationFailed(
+                "adapter_type must be 'C' for sealed adapters".into(),
+            ));
+        }
+
+        if manifest.slot_name != slot.to_string() {
+            return Err(GAuthError::AdapterRegistrationFailed(format!(
+                "Manifest slot_name '{}' does not match target slot '{}'",
+                manifest.slot_name, slot
+            )));
+        }
+
+        if !manifest.namespace.starts_with("@gimel/") {
+            return Err(GAuthError::AdapterRegistrationFailed(format!(
+                "Namespace '{}' must start with '@gimel/'",
+                manifest.namespace
+            )));
+        }
+
+        if manifest.issuer != "gimel-foundation" {
+            return Err(GAuthError::AdapterRegistrationFailed(format!(
+                "Issuer must be 'gimel-foundation', got '{}'",
+                manifest.issuer
+            )));
+        }
+
+        if self.revoked_versions.contains(&manifest.adapter_version) {
+            return Err(GAuthError::AdapterRegistrationFailed(format!(
+                "Adapter version '{}' has been revoked",
+                manifest.adapter_version
+            )));
+        }
+
+        if self.revoked_keys.contains(&manifest.public_key) {
+            return Err(GAuthError::AdapterRegistrationFailed(
+                "Manifest public key has been revoked".into(),
+            ));
+        }
+
+        let mut manifest_for_verify = manifest.clone();
+        manifest_for_verify.signature = None;
+        let manifest_json = serde_json::to_vec(&manifest_for_verify)
+            .map_err(|e| GAuthError::AdapterSignatureInvalid(e.to_string()))?;
+
+        let signature = Signature::from_slice(signature_bytes)
+            .map_err(|e| {
+                GAuthError::AdapterSignatureInvalid(format!("Invalid signature format: {}", e))
+            })?;
+
+        for key in &self.trusted_keys {
+            if key.verify(&manifest_json, &signature).is_ok() {
+                return Ok(());
+            }
+        }
+
+        Err(GAuthError::AdapterSignatureInvalid(
+            "No trusted key verified the adapter manifest signature".into(),
+        ))
+    }
+
+    pub fn unregister(&mut self, slot: ConnectorSlot) -> Result<()> {
+        if slot.is_mandatory() {
+            return Err(GAuthError::AdapterRegistrationFailed(format!(
+                "Cannot unregister {} — it is mandatory",
+                slot
+            )));
+        }
+
+        let state = self.slot_states.get_mut(&slot).unwrap();
+        state.status = SlotStatus::Null;
+        state.implementation_label = "None".into();
+        state.attestation_satisfied = false;
+        Ok(())
+    }
+
+    pub fn satisfy_attestation(&mut self, slot: ConnectorSlot) -> Result<()> {
+        if !slot.requires_attestation() {
+            return Err(GAuthError::AdapterRegistrationFailed(format!(
+                "Slot {} does not require attestation",
+                slot
+            )));
+        }
+
+        let state = self.slot_states.get_mut(&slot).unwrap();
+        state.attestation_satisfied = true;
+
+        if state.status == SlotStatus::Pending {
+            state.status = SlotStatus::Active;
+        }
+
+        Ok(())
+    }
+
+    pub fn check_mandatory_slots(&self) -> Result<()> {
+        for slot in ConnectorSlot::all() {
+            if slot.is_mandatory() {
+                let state = self.slot_states.get(slot).unwrap();
+                if state.status == SlotStatus::Null {
+                    return Err(GAuthError::AdapterRegistrationFailed(format!(
+                        "Mandatory slot {} is not active",
+                        slot
+                    )));
+                }
+            }
+        }
+        Ok(())
+    }
+
+    pub fn is_operational(&self) -> bool {
+        self.check_mandatory_slots().is_ok()
+    }
+
+    pub fn slot_status(&self, slot: ConnectorSlot) -> &SlotState {
+        self.slot_states.get(&slot).unwrap()
+    }
+
+    pub fn all_slot_states(&self) -> Vec<&SlotState> {
+        ConnectorSlot::all()
+            .iter()
+            .map(|s| self.slot_states.get(s).unwrap())
+            .collect()
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
@@ -43,15 +530,21 @@ pub struct AdapterRegistry {
     trusted_namespaces: Vec<String>,
     oauth_engines: HashMap<String, Arc<dyn OAuthEngineAdapter>>,
     foundries: HashMap<String, Arc<dyn FoundryAdapter>>,
-    ai_enrichments: HashMap<String, Arc<dyn AIEnrichmentAdapter>>,
-    risk_scorers: HashMap<String, Arc<dyn RiskScoringAdapter>>,
-    regulatory_reasoners: HashMap<String, Arc<dyn RegulatoryReasoningAdapter>>,
 }
 
 impl Default for AdapterRegistry {
     fn default() -> Self {
         Self::new()
     }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct LegacyAdapterManifest {
+    pub name: String,
+    pub version: String,
+    pub namespace: String,
+    pub description: String,
+    pub adapter_type: AdapterType,
 }
 
 impl AdapterRegistry {
@@ -61,9 +554,6 @@ impl AdapterRegistry {
             trusted_namespaces: vec!["gimel".to_string(), "gimelfoundation".to_string()],
             oauth_engines: HashMap::new(),
             foundries: HashMap::new(),
-            ai_enrichments: HashMap::new(),
-            risk_scorers: HashMap::new(),
-            regulatory_reasoners: HashMap::new(),
         }
     }
 
@@ -77,14 +567,16 @@ impl AdapterRegistry {
 
     pub fn verify_manifest(
         &self,
-        manifest: &AdapterManifest,
+        manifest: &LegacyAdapterManifest,
         signature_bytes: &[u8],
     ) -> Result<()> {
         let manifest_json = serde_json::to_vec(manifest)
             .map_err(|e| GAuthError::AdapterSignatureInvalid(e.to_string()))?;
 
         let signature = Signature::from_slice(signature_bytes)
-            .map_err(|e| GAuthError::AdapterSignatureInvalid(format!("Invalid signature format: {}", e)))?;
+            .map_err(|e| {
+                GAuthError::AdapterSignatureInvalid(format!("Invalid signature format: {}", e))
+            })?;
 
         for key in &self.trusted_keys {
             if key.verify(&manifest_json, &signature).is_ok() {
@@ -97,13 +589,13 @@ impl AdapterRegistry {
         ))
     }
 
-    fn check_namespace(&self, manifest: &AdapterManifest) -> Result<()> {
-        if self.trusted_namespaces.contains(&manifest.namespace) {
+    fn check_namespace(&self, namespace: &str) -> Result<()> {
+        if self.trusted_namespaces.contains(&namespace.to_string()) {
             Ok(())
         } else {
             Err(GAuthError::AdapterRegistrationFailed(format!(
                 "Namespace '{}' is not in the trusted namespaces list",
-                manifest.namespace
+                namespace
             )))
         }
     }
@@ -112,9 +604,7 @@ impl AdapterRegistry {
         let exists = match adapter_type {
             AdapterType::OAuthEngine => self.oauth_engines.contains_key(name),
             AdapterType::Foundry => self.foundries.contains_key(name),
-            AdapterType::AiEnrichment => self.ai_enrichments.contains_key(name),
-            AdapterType::RiskScoring => self.risk_scorers.contains_key(name),
-            AdapterType::RegulatoryReasoning => self.regulatory_reasoners.contains_key(name),
+            _ => false,
         };
         if exists {
             Err(GAuthError::AdapterRegistrationFailed(format!(
@@ -128,7 +618,7 @@ impl AdapterRegistry {
 
     pub fn register_oauth_engine(
         &mut self,
-        manifest: &AdapterManifest,
+        manifest: &LegacyAdapterManifest,
         signature: &[u8],
         adapter: Arc<dyn OAuthEngineAdapter>,
     ) -> Result<()> {
@@ -137,7 +627,7 @@ impl AdapterRegistry {
                 "Manifest adapter_type mismatch".into(),
             ));
         }
-        self.check_namespace(manifest)?;
+        self.check_namespace(&manifest.namespace)?;
         self.check_no_collision(&manifest.name, &manifest.adapter_type)?;
         self.verify_manifest(manifest, signature)?;
         self.oauth_engines.insert(manifest.name.clone(), adapter);
@@ -146,7 +636,7 @@ impl AdapterRegistry {
 
     pub fn register_foundry(
         &mut self,
-        manifest: &AdapterManifest,
+        manifest: &LegacyAdapterManifest,
         signature: &[u8],
         adapter: Arc<dyn FoundryAdapter>,
     ) -> Result<()> {
@@ -155,65 +645,10 @@ impl AdapterRegistry {
                 "Manifest adapter_type mismatch".into(),
             ));
         }
-        self.check_namespace(manifest)?;
+        self.check_namespace(&manifest.namespace)?;
         self.check_no_collision(&manifest.name, &manifest.adapter_type)?;
         self.verify_manifest(manifest, signature)?;
         self.foundries.insert(manifest.name.clone(), adapter);
-        Ok(())
-    }
-
-    pub fn register_ai_enrichment(
-        &mut self,
-        manifest: &AdapterManifest,
-        signature: &[u8],
-        adapter: Arc<dyn AIEnrichmentAdapter>,
-    ) -> Result<()> {
-        if manifest.adapter_type != AdapterType::AiEnrichment {
-            return Err(GAuthError::AdapterRegistrationFailed(
-                "Manifest adapter_type mismatch".into(),
-            ));
-        }
-        self.check_namespace(manifest)?;
-        self.check_no_collision(&manifest.name, &manifest.adapter_type)?;
-        self.verify_manifest(manifest, signature)?;
-        self.ai_enrichments.insert(manifest.name.clone(), adapter);
-        Ok(())
-    }
-
-    pub fn register_risk_scoring(
-        &mut self,
-        manifest: &AdapterManifest,
-        signature: &[u8],
-        adapter: Arc<dyn RiskScoringAdapter>,
-    ) -> Result<()> {
-        if manifest.adapter_type != AdapterType::RiskScoring {
-            return Err(GAuthError::AdapterRegistrationFailed(
-                "Manifest adapter_type mismatch".into(),
-            ));
-        }
-        self.check_namespace(manifest)?;
-        self.check_no_collision(&manifest.name, &manifest.adapter_type)?;
-        self.verify_manifest(manifest, signature)?;
-        self.risk_scorers.insert(manifest.name.clone(), adapter);
-        Ok(())
-    }
-
-    pub fn register_regulatory_reasoning(
-        &mut self,
-        manifest: &AdapterManifest,
-        signature: &[u8],
-        adapter: Arc<dyn RegulatoryReasoningAdapter>,
-    ) -> Result<()> {
-        if manifest.adapter_type != AdapterType::RegulatoryReasoning {
-            return Err(GAuthError::AdapterRegistrationFailed(
-                "Manifest adapter_type mismatch".into(),
-            ));
-        }
-        self.check_namespace(manifest)?;
-        self.check_no_collision(&manifest.name, &manifest.adapter_type)?;
-        self.verify_manifest(manifest, signature)?;
-        self.regulatory_reasoners
-            .insert(manifest.name.clone(), adapter);
         Ok(())
     }
 
@@ -225,21 +660,6 @@ impl AdapterRegistry {
         self.foundries.get(name)
     }
 
-    pub fn get_ai_enrichment(&self, name: &str) -> Option<&Arc<dyn AIEnrichmentAdapter>> {
-        self.ai_enrichments.get(name)
-    }
-
-    pub fn get_risk_scoring(&self, name: &str) -> Option<&Arc<dyn RiskScoringAdapter>> {
-        self.risk_scorers.get(name)
-    }
-
-    pub fn get_regulatory_reasoning(
-        &self,
-        name: &str,
-    ) -> Option<&Arc<dyn RegulatoryReasoningAdapter>> {
-        self.regulatory_reasoners.get(name)
-    }
-
     pub fn list_registered(&self) -> Vec<(AdapterType, Vec<String>)> {
         vec![
             (
@@ -249,18 +669,6 @@ impl AdapterRegistry {
             (
                 AdapterType::Foundry,
                 self.foundries.keys().cloned().collect(),
-            ),
-            (
-                AdapterType::AiEnrichment,
-                self.ai_enrichments.keys().cloned().collect(),
-            ),
-            (
-                AdapterType::RiskScoring,
-                self.risk_scorers.keys().cloned().collect(),
-            ),
-            (
-                AdapterType::RegulatoryReasoning,
-                self.regulatory_reasoners.keys().cloned().collect(),
             ),
         ]
     }

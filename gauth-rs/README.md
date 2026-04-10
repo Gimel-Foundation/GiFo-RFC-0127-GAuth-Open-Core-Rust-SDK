@@ -6,31 +6,35 @@
 
 ## Overview
 
-`gauth-rs` implements the GiFo GAuth authorization protocol as specified in RFCs 0110, 0111, 0115, 0116, 0117, and 0118. It enables AI systems — digital agents, agentic AI, humanoid robots — to carry, present, and enforce Power of Attorney (PoA) credentials under a structured governance framework.
+`gauth-rs` implements the GiFo GAuth authorization protocol as specified in RFCs 0110-0118 and aligned with the SDK Implementation Guide v1.2. It enables AI systems — digital agents, agentic AI, humanoid robots — to carry, present, and enforce Power of Attorney (PoA) credentials under a structured governance framework.
 
 ## Architecture
 
 ```
-┌─────────────────────────────────────────────────────┐
-│                    gauth-rs SDK                      │
-├─────────────┬──────────┬────────────┬───────────────┤
-│   types/    │  token/  │    pep/    │  management/  │
-│  PoA schema │Extended  │ 16-check   │   Mandate     │
-│  Governance │  JWT     │ evaluation │  lifecycle    │
-│  Capability │ RS256/   │ pipeline   │  DRAFT→ACTIVE │
-│  Delegation │  ES256   │ fail-close │  →SUSPENDED/  │
-│             │          │            │   REVOKED/... │
-├─────────────┴──────────┴────────────┴───────────────┤
-│                    adapters/                         │
-│  Sealed registration with Ed25519 signature verify   │
-│  ┌──────────┬──────────┬──────────┬────────────────┐ │
-│  │  OAuth   │ Foundry  │   AI     │  Regulatory    │ │
-│  │  Engine  │          │Enrichment│  Reasoning     │ │
-│  └──────────┴──────────┴──────────┴────────────────┘ │
-├─────────────────────────────────────────────────────┤
-│                    crypto/                           │
-│  Canonical JSON · SHA-256 scope checksum · Ed25519   │
-└─────────────────────────────────────────────────────┘
+┌─────────────────────────────────────────────────────────────┐
+│                       gauth-rs SDK                          │
+├──────────────┬──────────┬────────────┬──────────────────────┤
+│   types/     │  token/  │    pep/    │    management/       │
+│  PoA schema  │Extended  │ 16-check   │  Mandate lifecycle   │
+│  Governance  │  JWT     │ evaluation │  License state       │
+│  Capability  │ RS256/   │ pipeline   │  machine             │
+│  Delegation  │  ES256   │ fail-close │  Two-tier ToS        │
+├──────────────┴──────────┴────────────┴──────────────────────┤
+│                   adapters/ (7-Slot Connector Model)         │
+│  ┌────────┬────────────┬─────────┬────────┐                 │
+│  │ Slot 1 │  Slot 2    │ Slot 3  │ Slot 4 │ Type A/B        │
+│  │  PDP   │  OAuth     │Foundry  │ Wallet │                 │
+│  │(Int/A) │  Engine(A) │  (B)    │  (B)   │                 │
+│  ├────────┼────────────┼─────────┴────────┘                 │
+│  │ Slot 5 │  Slot 6    │ Slot 7           │ Type C          │
+│  │  AI    │  Web3      │ DNA Identity     │ (Proprietary)   │
+│  │  Gov   │  Identity  │ (L-tier only)    │                 │
+│  └────────┴────────────┴──────────────────┘                 │
+│  Ed25519 signed manifests · Tariff gating (O/S/M/L)         │
+├─────────────────────────────────────────────────────────────┤
+│                       crypto/                                │
+│  Canonical JSON · SHA-256 scope checksum · Ed25519           │
+└─────────────────────────────────────────────────────────────┘
 ```
 
 ## Modules
@@ -40,10 +44,42 @@
 | `types` | PoA credential schema, governance profiles (Minimal/Standard/Strict/Enterprise/Behörde), three-layer capability model (core verbs, platform permissions, budget/session limits), delegation chain |
 | `token` | Extended Token JWT encoding/decoding with RS256/ES256 (HS256 prohibited), schema version `0116.2.2`, scope checksum verification |
 | `pep` | Policy Enforcement Point — 16-check evaluation pipeline (CHK-01 through CHK-16) with fail-closed default, batch enforcement, audit records |
-| `management` | Mandate lifecycle management: DRAFT → ACTIVE → SUSPENDED/EXPIRED/REVOKED/BUDGET_EXCEEDED/SUPERSEDED, validation, budget/TTL extension |
-| `adapters` | Sealed adapter registration with Ed25519 signature-verified manifests. Interfaces for OAuth engine, foundry, AI enrichment, risk scoring, and regulatory reasoning |
+| `management` | Mandate lifecycle management (DRAFT → ACTIVE → SUSPENDED/EXPIRED/REVOKED/BUDGET_EXCEEDED/SUPERSEDED), license state machine (mpl_2_0 → gimel_tos), two-tier ToS model |
+| `adapters` | 7-slot connector model with Type A/B/C/D classification, Ed25519 signed manifests, tariff gating (O/S/M/L), adapter lifecycle (null → pending → active → error) |
 | `crypto` | Canonical JSON serialization, SHA-256 scope checksum, Ed25519 signature helpers |
 | `error` | Comprehensive error hierarchy with typed variants for each failure mode |
+
+## 7-Slot Connector Model
+
+Per SDK Implementation Guide v1.2 §4:
+
+| Slot | Name | Type | Tariff | Description |
+|------|------|------|--------|-------------|
+| 1 | `pdp` | Internal | O+ | Policy Decision Point (SDK-embedded) |
+| 2 | `oauth_engine` | A | O+ | OAuth 2.0 / JWT token engine |
+| 3 | `foundry` | B | O+ | Agent foundry / sandbox management |
+| 4 | `wallet` | B | O+ | Credential wallet / VC storage |
+| 5 | `ai_governance` | C | M+ | AI-enabled governance (Exclusion 1) |
+| 6 | `web3_identity` | C | M+ | Web3/DID identity (Exclusion 2) |
+| 7 | `dna_identity` | C | L | DNA-based identity (Exclusion 3) |
+
+## Adapter Type Classification
+
+| Type | Category | Registration | Attestation | License |
+|------|----------|-------------|-------------|---------|
+| A | Open Core | Ed25519 signed manifest | Not required | MPL-2.0 |
+| B | Open Core | Ed25519 signed manifest | Not required | MPL-2.0 |
+| C | Proprietary | `@gimel/` namespace, `gimel-foundation` issuer | Required (Ed25519) | Proprietary |
+| D | Reserved | Future use | TBD | TBD |
+
+## Tariff Gating
+
+| Tier | Name | Type C Access |
+|------|------|---------------|
+| O | Open Core | None |
+| S | Small | None |
+| M | Medium | ai_governance, web3_identity |
+| L | Large | ai_governance, web3_identity, dna_identity |
 
 ## PEP Evaluation Pipeline (16 Checks)
 
@@ -76,17 +112,24 @@
 | Enterprise | 10,000 EUR | No | dev, staging, prod | Supervised | 3 |
 | Behörde | Unlimited | No | dev, staging, prod | Four-Eyes | 2 |
 
+## License State Machine
+
+```
+mpl_2_0  ──(accept Platform ToS)──▶  gimel_tos
+```
+
+Per-service ToS (Tier-2) tracks independently for each Type C slot:
+`not_required` → `pending` → `accepted` / `rejected`
+
 ## Exclusions Notice
 
-The following features are **EXCLUDED** from this open-source SDK and from the MPL-2.0 license. They are subject to separate proprietary licensing by Gimel Foundation / Gimel Technologies GmbH:
+The following features are **EXCLUDED** from this open-source SDK and from the MPL-2.0 license. They are subject to separate proprietary licensing by Gimel Foundation gGmbH i.G. / Gimel Technologies GmbH:
 
 1. **AI-enabled Governance** — AI that controls, tracks, or assures authorization compliance, deployment lifecycles, or outcome quality.
-
 2. **Web3 Integration** — Blockchain technology, web3 tokens, and smart contracts for extended tokens.
-
 3. **DNA-based Identities and PQC associated** — Genetic-data-based identities, post-quantum cryptography seeds derived from DNA, and AI that tracks DNA identity quality or related risks.
 
-Users MUST NOT integrate these Exclusions without a separate written license from Gimel Foundation. See the `LICENSE` file for full legal terms.
+Rule-based (non-AI) implementations of adapter interfaces are covered by MPL-2.0. AI-enabled implementations fall under the Exclusions. See [ADDITIONAL-TERMS.md](ADDITIONAL-TERMS.md) for full details.
 
 ## Quick Start
 
@@ -186,12 +229,13 @@ assert_eq!(decision.decision, Decision::Permit);
 - **RFC 0116** — Extended Token Specification
 - **RFC 0117** — Policy Enforcement Point (PEP) Pipeline
 - **RFC 0118** — Management API and Adapter Architecture
+- **SDK Implementation Guide v1.2** — 7-Slot Connector Model, Tariff Gating, Adapter Classification
 
 ## License
 
 This project is licensed under the Mozilla Public License 2.0 — see the [LICENSE](LICENSE) file for details.
 
-**Important:** The Exclusions described above (AI-enabled Governance, Web3 Integration, DNA-based Identities and PQC) are subject to separate proprietary licensing by Gimel Foundation gGmbH i.G. / Gimel Technologies GmbH.
+**Important:** The Exclusions described above (AI-enabled Governance, Web3 Integration, DNA-based Identities and PQC) are subject to separate proprietary licensing by Gimel Foundation gGmbH i.G. / Gimel Technologies GmbH. See [ADDITIONAL-TERMS.md](ADDITIONAL-TERMS.md).
 
 ## Contact
 

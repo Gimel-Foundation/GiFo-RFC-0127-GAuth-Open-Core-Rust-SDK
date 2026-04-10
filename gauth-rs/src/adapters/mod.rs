@@ -1,25 +1,28 @@
 // Copyright (c) 2025-2026 Gimel Foundation gGmbH i.G.
 // SPDX-License-Identifier: MPL-2.0
 //
-// ADAPTER SYSTEM — SEALED REGISTRATION
+// ADAPTER SYSTEM — 7-SLOT CONNECTOR MODEL
 //
-// This module defines abstract adapter interfaces for integrating external
-// services with the GAuth runtime. The SDK ships with default no-op/rule-based
-// implementations. Proprietary Gimel adapters (e.g., gauth-adapters-gimel) are
-// distributed as a separate private package and must be cryptographically
-// signed to be registered.
+// This module defines the GAuth adapter interfaces per the SDK Implementation
+// Guide §3–§5. The SDK uses a 7-slot connector model with four adapter type
+// classes (Internal, A, B, C) plus an internal billing adapter (D).
+//
+// Type A/B adapter interfaces are open-source (MPL-2.0). Type C adapter
+// *interfaces* are also MPL-2.0, but Type C *implementations* (AI Governance,
+// Web3 Identity, DNA Identity) are proprietary to Gimel Foundation and require
+// Ed25519 sealed manifest attestation before activation.
 //
 // EXCLUSIONS NOTICE:
-// The following adapter categories, when implemented with AI capabilities,
-// fall under the Exclusions and are NOT covered by the MPL-2.0 license:
+// The following adapter categories fall under the Exclusions Addendum and are
+// NOT covered by the MPL-2.0 license:
 //
-//   - AIEnrichmentAdapter with trained AI models for governance
-//   - RiskScoringAdapter with AI-based threat detection
-//   - RegulatoryReasoningAdapter with AI-based compliance reasoning
+//   - Slot 5 (ai_governance): GovernanceAdapter — AI-enabled governance
+//   - Slot 6 (web3_identity): Web3IdentityAdapter — Web3 identity integration
+//   - Slot 7 (dna_identity): DNAIdentityAdapter — DNA-based identities / PQC
 //
 // These are subject to proprietary licensing by Gimel Foundation /
-// Gimel Technologies GmbH. Rule-based (non-AI) implementations of these
-// adapters ARE covered by MPL-2.0.
+// Gimel Technologies GmbH. Rule-based (non-AI) fallback implementations
+// of GovernanceAdapter ARE covered by MPL-2.0.
 
 mod registry;
 mod traits;

@@ -910,7 +910,7 @@ fn test_mandate_expire_and_supersede() {
 fn test_adapter_registry_rejects_untrusted() {
     let mut registry = AdapterRegistry::new();
 
-    let manifest = AdapterManifest {
+    let manifest = LegacyAdapterManifest {
         name: "test-adapter".into(),
         version: "1.0.0".into(),
         namespace: "gimel".into(),
@@ -934,7 +934,7 @@ fn test_adapter_registry_rejects_untrusted() {
 fn test_adapter_registry_rejects_wrong_namespace() {
     let mut registry = AdapterRegistry::new();
 
-    let manifest = AdapterManifest {
+    let manifest = LegacyAdapterManifest {
         name: "evil-adapter".into(),
         version: "1.0.0".into(),
         namespace: "evil-corp".into(),
@@ -967,7 +967,7 @@ fn test_adapter_registry_signed_registration() {
     let mut registry = AdapterRegistry::new();
     registry.add_trusted_key(verifying_key);
 
-    let manifest = AdapterManifest {
+    let manifest = LegacyAdapterManifest {
         name: "official-oauth".into(),
         version: "1.0.0".into(),
         namespace: "gimel".into(),
@@ -992,7 +992,7 @@ fn test_adapter_registry_list_registered() {
     let registry = AdapterRegistry::new();
     let registered = registry.list_registered();
 
-    assert_eq!(registered.len(), 5);
+    assert_eq!(registered.len(), 2);
     for (_, names) in &registered {
         assert!(names.is_empty());
     }
@@ -1001,38 +1001,49 @@ fn test_adapter_registry_list_registered() {
 #[test]
 fn test_adapter_noop_implementations() {
     let oauth = NoOpOAuthEngine;
-    assert!(oauth.authorize("id", "scope", "uri").is_err());
-    assert!(oauth.token("grant", "code", "uri").is_err());
+    assert!(oauth.issue_token(&serde_json::json!({}), &serde_json::json!({})).is_err());
+    assert!(oauth.validate_token("token").is_err());
     assert!(oauth.introspect("token").is_err());
-    assert!(oauth.revoke("token").is_err());
-    assert!(oauth.jwks().is_err());
+    assert!(oauth.revoke_token("token", "test").is_err());
+    assert!(oauth.get_jwks().is_err());
+    assert!(oauth.before_token_issuance(&serde_json::json!({})).is_ok());
+    assert!(oauth.after_token_issuance(
+        &SignedJwt { token: "t".into(), expires_at: "e".into() },
+        &serde_json::json!({}),
+    ).is_ok());
+    let health = oauth.health_check().unwrap();
+    assert!(!health.healthy);
 
     let foundry = NoOpFoundry;
-    assert!(foundry.execute("cmd", &serde_json::json!({})).is_err());
-    assert!(foundry.validate_environment().unwrap());
+    assert!(foundry.execute_action(&serde_json::json!({}), &serde_json::json!({})).is_err());
+    let catalog = foundry.get_agent_catalog().unwrap();
+    assert!(catalog.is_empty());
+    let sandbox = foundry.validate_sandbox("agent_1", &serde_json::json!({})).unwrap();
+    assert!(sandbox.valid);
 
-    let enrichment = RuleBasedEnrichment;
-    let poa = make_standard_poa();
-    let req = make_enforcement_request("file.read", "src/main.rs", "agent:test-agent-001");
-    let engine = PepEngine::default();
-    let decision = engine.enforce_action(&req, &poa);
-    let enriched = enrichment
-        .enrich_enforcement(&req, &poa, &decision)
-        .unwrap();
-    assert_eq!(enriched.decision, decision.decision);
-    assert_eq!(enrichment.score_risk(&req, &poa).unwrap(), 0.0);
+    let wallet = NoOpWallet;
+    assert!(wallet.store_credential(&serde_json::json!({})).is_err());
+    assert!(wallet.present_credential(&serde_json::json!({})).is_err());
+    let creds = wallet.list_credentials(None).unwrap();
+    assert!(creds.is_empty());
+    assert!(wallet.delete_credential("c1").is_err());
+    assert!(wallet.generate_selective_disclosure(&serde_json::json!({}), &serde_json::json!({})).is_err());
 
-    let risk = RuleBasedRiskScoring;
-    let assessment = risk
-        .compute_composite_risk(&poa, &serde_json::json!({}))
-        .unwrap();
-    assert_eq!(assessment.overall_score, 0.0);
+    let governance = RuleBasedGovernance;
+    let check = governance.check_access(&serde_json::json!({})).unwrap();
+    assert!(check.allowed);
+    let recs = governance.get_recommendations(&serde_json::json!({})).unwrap();
+    assert!(recs.is_empty());
 
-    let regulatory = RuleBasedRegulatoryReasoning;
-    let compliance = regulatory
-        .evaluate_compliance(&poa, &serde_json::json!({}))
-        .unwrap();
-    assert!(compliance.compliant);
+    let web3 = NullWeb3Identity;
+    let resolved = web3.resolve_identity("did:example:123").unwrap();
+    assert!(resolved.is_none());
+    assert!(web3.verify_credential(&serde_json::json!({})).is_err());
+
+    let dna = NullDnaIdentity;
+    let resolved = dna.resolve_identity("dna:sample:456").unwrap();
+    assert!(resolved.is_none());
+    assert!(dna.verify_biometric(&serde_json::json!({})).is_err());
 }
 
 #[test]
@@ -1168,7 +1179,7 @@ fn test_adapter_registry_rejects_collision() {
     let mut registry = AdapterRegistry::new();
     registry.add_trusted_key(verifying_key);
 
-    let manifest = AdapterManifest {
+    let manifest = LegacyAdapterManifest {
         name: "collision-test".into(),
         version: "1.0.0".into(),
         namespace: "gimel".into(),
@@ -1266,4 +1277,381 @@ fn test_pep_mandate_revoked_uses_correct_code() {
     assert_eq!(decision.decision, Decision::Deny);
     let violations = decision.violations.unwrap();
     assert!(violations.iter().any(|v| v.code == "MANDATE_REVOKED"));
+}
+
+#[test]
+fn test_connector_slot_model_7_slots() {
+    let all = ConnectorSlot::all();
+    assert_eq!(all.len(), 7);
+
+    assert_eq!(ConnectorSlot::Pdp.slot_number(), 1);
+    assert_eq!(ConnectorSlot::OauthEngine.slot_number(), 2);
+    assert_eq!(ConnectorSlot::Foundry.slot_number(), 3);
+    assert_eq!(ConnectorSlot::Wallet.slot_number(), 4);
+    assert_eq!(ConnectorSlot::AiGovernance.slot_number(), 5);
+    assert_eq!(ConnectorSlot::Web3Identity.slot_number(), 6);
+    assert_eq!(ConnectorSlot::DnaIdentity.slot_number(), 7);
+
+    assert!(ConnectorSlot::Pdp.is_mandatory());
+    assert!(ConnectorSlot::OauthEngine.is_mandatory());
+    assert!(!ConnectorSlot::Foundry.is_mandatory());
+    assert!(!ConnectorSlot::AiGovernance.is_mandatory());
+}
+
+#[test]
+fn test_connector_slot_type_classification() {
+    assert_eq!(
+        ConnectorSlot::Pdp.adapter_type_class(),
+        AdapterTypeClass::Internal
+    );
+    assert_eq!(
+        ConnectorSlot::OauthEngine.adapter_type_class(),
+        AdapterTypeClass::A
+    );
+    assert_eq!(
+        ConnectorSlot::Foundry.adapter_type_class(),
+        AdapterTypeClass::B
+    );
+    assert_eq!(
+        ConnectorSlot::Wallet.adapter_type_class(),
+        AdapterTypeClass::B
+    );
+    assert_eq!(
+        ConnectorSlot::AiGovernance.adapter_type_class(),
+        AdapterTypeClass::C
+    );
+    assert_eq!(
+        ConnectorSlot::Web3Identity.adapter_type_class(),
+        AdapterTypeClass::C
+    );
+    assert_eq!(
+        ConnectorSlot::DnaIdentity.adapter_type_class(),
+        AdapterTypeClass::C
+    );
+}
+
+#[test]
+fn test_connector_slot_attestation_required() {
+    assert!(!ConnectorSlot::Pdp.requires_attestation());
+    assert!(!ConnectorSlot::OauthEngine.requires_attestation());
+    assert!(!ConnectorSlot::Foundry.requires_attestation());
+    assert!(!ConnectorSlot::Wallet.requires_attestation());
+    assert!(ConnectorSlot::AiGovernance.requires_attestation());
+    assert!(ConnectorSlot::Web3Identity.requires_attestation());
+    assert!(ConnectorSlot::DnaIdentity.requires_attestation());
+}
+
+#[test]
+fn test_connector_slot_namespace() {
+    assert_eq!(ConnectorSlot::Pdp.canonical_namespace(), "@gimel/pdp");
+    assert_eq!(
+        ConnectorSlot::OauthEngine.canonical_namespace(),
+        "@gimel/oauth-engine"
+    );
+    assert_eq!(
+        ConnectorSlot::DnaIdentity.canonical_namespace(),
+        "@gimel/dna-identity"
+    );
+}
+
+#[test]
+fn test_tariff_gating_open_core() {
+    let gate = check_tariff_gate(ConnectorSlot::OauthEngine, TariffCode::O);
+    assert!(gate.allowed);
+
+    let gate = check_tariff_gate(ConnectorSlot::Foundry, TariffCode::O);
+    assert!(gate.allowed);
+
+    let gate = check_tariff_gate(ConnectorSlot::AiGovernance, TariffCode::O);
+    assert!(!gate.allowed);
+
+    let gate = check_tariff_gate(ConnectorSlot::Web3Identity, TariffCode::O);
+    assert!(!gate.allowed);
+
+    let gate = check_tariff_gate(ConnectorSlot::DnaIdentity, TariffCode::O);
+    assert!(!gate.allowed);
+}
+
+#[test]
+fn test_tariff_gating_small_tier() {
+    let gate = check_tariff_gate(ConnectorSlot::AiGovernance, TariffCode::S);
+    assert!(!gate.allowed);
+
+    let gate = check_tariff_gate(ConnectorSlot::DnaIdentity, TariffCode::S);
+    assert!(!gate.allowed);
+}
+
+#[test]
+fn test_tariff_gating_medium_tier() {
+    let gate = check_tariff_gate(ConnectorSlot::AiGovernance, TariffCode::M);
+    assert!(gate.allowed);
+
+    let gate = check_tariff_gate(ConnectorSlot::Web3Identity, TariffCode::M);
+    assert!(gate.allowed);
+
+    let gate = check_tariff_gate(ConnectorSlot::DnaIdentity, TariffCode::M);
+    assert!(!gate.allowed);
+}
+
+#[test]
+fn test_tariff_gating_large_tier() {
+    let gate = check_tariff_gate(ConnectorSlot::AiGovernance, TariffCode::L);
+    assert!(gate.allowed);
+
+    let gate = check_tariff_gate(ConnectorSlot::Web3Identity, TariffCode::L);
+    assert!(gate.allowed);
+
+    let gate = check_tariff_gate(ConnectorSlot::DnaIdentity, TariffCode::L);
+    assert!(gate.allowed);
+}
+
+#[test]
+fn test_tariff_gating_pdp_always_available() {
+    for tariff in &[TariffCode::O, TariffCode::S, TariffCode::M, TariffCode::L] {
+        let gate = check_tariff_gate(ConnectorSlot::Pdp, *tariff);
+        assert!(gate.allowed);
+    }
+}
+
+#[test]
+fn test_slot_availability_matrix() {
+    assert_eq!(
+        slot_availability(ConnectorSlot::Pdp, TariffCode::O),
+        SlotAvailability::ActiveAlways
+    );
+    assert_eq!(
+        slot_availability(ConnectorSlot::OauthEngine, TariffCode::O),
+        SlotAvailability::UserProvidedRequired
+    );
+    assert_eq!(
+        slot_availability(ConnectorSlot::OauthEngine, TariffCode::S),
+        SlotAvailability::GimelOrUser
+    );
+    assert_eq!(
+        slot_availability(ConnectorSlot::Foundry, TariffCode::O),
+        SlotAvailability::NullOrUser
+    );
+    assert_eq!(
+        slot_availability(ConnectorSlot::AiGovernance, TariffCode::M),
+        SlotAvailability::AttestedGimel
+    );
+    assert_eq!(
+        slot_availability(ConnectorSlot::DnaIdentity, TariffCode::L),
+        SlotAvailability::AttestedGimel
+    );
+    assert_eq!(
+        slot_availability(ConnectorSlot::DnaIdentity, TariffCode::M),
+        SlotAvailability::Null
+    );
+}
+
+#[test]
+fn test_license_state_machine_default() {
+    let state = LicenseState::new();
+    assert_eq!(state.license_type, LicenseType::Mpl2_0);
+    assert!(!state.platform_tos_accepted());
+    assert!(!state.can_activate_gimel_hosted());
+}
+
+#[test]
+fn test_license_state_machine_accept_platform_tos() {
+    let mut state = LicenseState::new();
+    state.accept_platform_tos("1.0.0", "2025-01-01T00:00:00Z");
+
+    assert_eq!(state.license_type, LicenseType::GimelTos);
+    assert!(state.platform_tos_accepted());
+    assert!(state.can_activate_gimel_hosted());
+    assert_eq!(state.license_version, Some("1.0.0".to_string()));
+}
+
+#[test]
+fn test_license_state_machine_service_tos() {
+    let mut state = LicenseState::new();
+    state.accept_platform_tos("1.0.0", "2025-01-01T00:00:00Z");
+
+    assert!(!state.service_tos_accepted(ConnectorSlot::AiGovernance));
+    assert!(!state.can_activate_type_c(ConnectorSlot::AiGovernance));
+
+    assert_eq!(
+        state.service_tos_status(ConnectorSlot::AiGovernance),
+        ServiceTosStatus::Pending
+    );
+
+    state
+        .accept_service_tos(ConnectorSlot::AiGovernance, "1.0.0", "2025-01-01T00:00:00Z")
+        .unwrap();
+
+    assert!(state.service_tos_accepted(ConnectorSlot::AiGovernance));
+    assert!(state.can_activate_type_c(ConnectorSlot::AiGovernance));
+    assert_eq!(
+        state.service_tos_status(ConnectorSlot::AiGovernance),
+        ServiceTosStatus::Accepted
+    );
+
+    assert!(!state.service_tos_accepted(ConnectorSlot::Web3Identity));
+    assert!(!state.can_activate_type_c(ConnectorSlot::Web3Identity));
+}
+
+#[test]
+fn test_license_state_machine_type_c_requires_platform_tos() {
+    let mut state = LicenseState::new();
+
+    state
+        .accept_service_tos(ConnectorSlot::AiGovernance, "1.0.0", "2025-01-01T00:00:00Z")
+        .unwrap();
+
+    assert!(state.service_tos_accepted(ConnectorSlot::AiGovernance));
+    assert!(!state.can_activate_type_c(ConnectorSlot::AiGovernance));
+}
+
+#[test]
+fn test_license_state_service_tos_rejects_non_type_c() {
+    let mut state = LicenseState::new();
+
+    let result = state.accept_service_tos(
+        ConnectorSlot::Foundry,
+        "1.0.0",
+        "2025-01-01T00:00:00Z",
+    );
+    assert!(result.is_err());
+
+    assert_eq!(
+        state.service_tos_status(ConnectorSlot::Foundry),
+        ServiceTosStatus::NotRequired
+    );
+
+    assert!(!state.can_activate_type_c(ConnectorSlot::Foundry));
+}
+
+#[test]
+fn test_license_state_service_tos_rejection() {
+    let mut state = LicenseState::new();
+    state.accept_platform_tos("1.0.0", "2025-01-01T00:00:00Z");
+
+    state.reject_service_tos(ConnectorSlot::DnaIdentity).unwrap();
+    assert_eq!(
+        state.service_tos_status(ConnectorSlot::DnaIdentity),
+        ServiceTosStatus::Rejected
+    );
+    assert!(!state.can_activate_type_c(ConnectorSlot::DnaIdentity));
+}
+
+#[test]
+fn test_license_state_tos_reacceptance() {
+    let mut state = LicenseState::new();
+    state.accept_platform_tos("1.0.0", "2025-01-01T00:00:00Z");
+
+    assert!(!state.requires_platform_tos_reacceptance("1.0.0"));
+    assert!(state.requires_platform_tos_reacceptance("2.0.0"));
+
+    assert!(!state.requires_platform_tos_reacceptance("0.9.0"));
+
+    state
+        .accept_service_tos(ConnectorSlot::Web3Identity, "1.0.0", "2025-01-01T00:00:00Z")
+        .unwrap();
+    assert!(!state.requires_service_tos_reacceptance(ConnectorSlot::Web3Identity, "1.0.0"));
+    assert!(state.requires_service_tos_reacceptance(ConnectorSlot::Web3Identity, "2.0.0"));
+    assert!(!state.requires_service_tos_reacceptance(ConnectorSlot::Web3Identity, "0.5.0"));
+}
+
+#[test]
+fn test_license_state_semver_comparison() {
+    let mut state = LicenseState::new();
+    state.accept_platform_tos("2.0.0", "2025-01-01T00:00:00Z");
+
+    assert!(!state.requires_platform_tos_reacceptance("2.0.0"));
+    assert!(state.requires_platform_tos_reacceptance("10.0.0"));
+    assert!(!state.requires_platform_tos_reacceptance("1.9.9"));
+}
+
+#[test]
+fn test_license_type_serialization() {
+    let mpl = LicenseType::Mpl2_0;
+    let json = serde_json::to_string(&mpl).unwrap();
+    assert_eq!(json, "\"mpl_2_0\"");
+
+    let gimel = LicenseType::GimelTos;
+    let json = serde_json::to_string(&gimel).unwrap();
+    assert_eq!(json, "\"gimel_tos\"");
+
+    let parsed: LicenseType = serde_json::from_str("\"mpl_2_0\"").unwrap();
+    assert_eq!(parsed, LicenseType::Mpl2_0);
+
+    let parsed: LicenseType = serde_json::from_str("\"gimel_tos\"").unwrap();
+    assert_eq!(parsed, LicenseType::GimelTos);
+}
+
+#[test]
+fn test_connector_slot_registry_init() {
+    let registry = ConnectorSlotRegistry::new(TariffCode::O);
+    let state = registry.slot_status(ConnectorSlot::Pdp);
+    assert_eq!(state.status, SlotStatus::Active);
+
+    let state = registry.slot_status(ConnectorSlot::OauthEngine);
+    assert_eq!(state.status, SlotStatus::Null);
+
+    let state = registry.slot_status(ConnectorSlot::AiGovernance);
+    assert_eq!(state.status, SlotStatus::Null);
+
+    assert!(registry.check_mandatory_slots().is_err());
+    assert!(!registry.is_operational());
+}
+
+#[test]
+fn test_connector_slot_registry_mandatory_enforcement() {
+    let mut registry = ConnectorSlotRegistry::new(TariffCode::O);
+
+    assert!(!registry.is_operational());
+
+    registry.register(ConnectorSlot::OauthEngine, "user-oauth").unwrap();
+
+    assert!(registry.is_operational());
+    assert!(registry.check_mandatory_slots().is_ok());
+}
+
+#[test]
+fn test_connector_slot_registry_tariff_enforcement() {
+    let registry = ConnectorSlotRegistry::new(TariffCode::M);
+
+    let state = registry.slot_status(ConnectorSlot::AiGovernance);
+    assert_eq!(state.status, SlotStatus::Null);
+
+    let gate = check_tariff_gate(ConnectorSlot::AiGovernance, TariffCode::M);
+    assert!(gate.allowed);
+
+    let gate = check_tariff_gate(ConnectorSlot::DnaIdentity, TariffCode::M);
+    assert!(!gate.allowed);
+}
+
+#[test]
+fn test_billing_adapter_noop() {
+    let billing = NoOpBilling;
+    assert!(billing.check_credits("tenant_1", "op").is_err());
+    assert!(billing
+        .record_usage("tenant_1", "op", None)
+        .is_err());
+    assert!(billing
+        .get_balance("tenant_1")
+        .is_err());
+    let health = billing.health_check().unwrap();
+    assert!(!health.healthy);
+}
+
+#[test]
+fn test_pdp_adapter_rule_based() {
+    let pdp = RuleBasedPolicyDecision;
+    let result = pdp
+        .evaluate_mandate(&serde_json::json!({}), &serde_json::json!({}))
+        .unwrap();
+    assert!(result.allowed);
+    let action = pdp
+        .evaluate_action(&serde_json::json!({}), &serde_json::json!({}))
+        .unwrap();
+    assert!(action.allowed);
+    let ceilings = pdp
+        .validate_ceilings(&serde_json::json!({}), &serde_json::json!({}))
+        .unwrap();
+    assert!(ceilings.valid);
+    let health = pdp.health_check().unwrap();
+    assert!(health.healthy);
 }
