@@ -6,7 +6,7 @@
 
 The GAuth SDK implements the **GiFo GAuth authorization protocol** — a structured governance framework that enables AI systems (digital agents, agentic AI, humanoid robots) to carry, present, and enforce Power of Attorney (PoA) credentials.
 
-This monorepo contains the official SDK implementations across multiple languages, all aligned with the [GAuth SDK Implementation Guide](https://gimelfoundation.com) and GiFo RFCs 0110-0118.
+This monorepo contains the official SDK implementations across multiple languages, all aligned with the [GAuth SDK Implementation Guide](https://gimelid.com) and GiFo RFCs 0110-0118.
 
 ---
 
@@ -140,6 +140,6 @@ See [ADDITIONAL-TERMS.md](gauth-rs/ADDITIONAL-TERMS.md) for full details.
 ## Contact
 
 **Gimel Foundation gGmbH i.G.**
-Email: info@gimelfoundation.com
-Licensing: licensing@gimel.foundation
-Website: https://gimelfoundation.com
+Email: info@gimelid.com
+Licensing: licensing@gimelid.com
+Website: https://gimelid.com

@@ -602,7 +602,7 @@ impl AdapterRegistry {
     pub fn new() -> Self {
         Self {
             trusted_keys: Vec::new(),
-            trusted_namespaces: vec!["gimel".to_string(), "gimelfoundation".to_string()],
+            trusted_namespaces: vec!["gimel".to_string(), "gimelid".to_string()],
             oauth_engines: HashMap::new(),
             foundries: HashMap::new(),
             ai_enrichments: HashMap::new(),

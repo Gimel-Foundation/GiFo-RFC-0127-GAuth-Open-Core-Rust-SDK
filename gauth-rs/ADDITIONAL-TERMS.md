@@ -111,5 +111,5 @@ before the adapter can be activated. Service ToS states:
 For licensing inquiries regarding Exclusions or proprietary adapter implementations:
 
 **Gimel Foundation gGmbH i.G.**  
-Email: info@gimelfoundation.com  
-Website: https://gimelfoundation.com
+Email: info@gimelid.com  
+Website: https://gimelid.com

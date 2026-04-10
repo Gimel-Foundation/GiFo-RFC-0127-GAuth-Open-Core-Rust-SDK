@@ -240,5 +240,5 @@ This project is licensed under the Mozilla Public License 2.0 — see the [LICEN
 ## Contact
 
 Gimel Foundation gGmbH i.G.  
-Email: info@gimelfoundation.com  
-Website: https://gimelfoundation.com
+Email: info@gimelid.com  
+Website: https://gimelid.com
