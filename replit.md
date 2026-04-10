@@ -54,4 +54,12 @@ See the `pnpm-workspace` skill for workspace structure, TypeScript setup, and pa
 
 ### Commands
 - `cd gauth-rs && cargo build` — build the SDK
-- `cd gauth-rs && cargo test` — run tests (66 tests: 4 unit + 62 integration)
+- `cd gauth-rs && cargo test` — run tests (80 tests: 4 unit + 76 integration)
+- `cd gauth-rs && cargo clippy` — lint check (zero warnings)
+
+### Root-Level Files
+- `README.md` — GitHub monorepo README with protocol overview, repo structure, branch model
+- `CONTRIBUTION-AND-RELEASE-POLICY.md` — Normative contribution workflow, branch model (main/replit/feature), CI gates, release process (per SDK Implementation Guide §16)
+- `gauth-rs/LICENSE` — Mozilla Public License 2.0 (full text)
+- `gauth-rs/ADDITIONAL-TERMS.md` — Exclusions Addendum (§15.6)
+- `gauth-rs/README.md` — Rust SDK documentation with architecture, quick start, full API reference
