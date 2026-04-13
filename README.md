@@ -136,7 +136,7 @@ Every PR triggers the full CI pipeline:
 
 ## Licensing Model
 
-This SDK uses a **dual-layer coexistence** licensing model:
+This SDK uses a **three-layer coexistence** licensing model:
 
 | Layer | License | Scope | Revocable? |
 |-------|---------|-------|------------|

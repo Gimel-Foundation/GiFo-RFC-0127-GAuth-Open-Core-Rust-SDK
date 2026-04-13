@@ -47,7 +47,7 @@ See the `pnpm-workspace` skill for workspace structure, TypeScript setup, and pa
 - **7-slot connector model**: pdp(1,Internal), oauth_engine(2,A), foundry(3,B), wallet(4,B), ai_governance(5,C), web3_identity(6,C), dna_identity(7,C)
 - **Tariff gating**: O=Open Core, M+O=Hybrid Service, L+O=Hybrid Enterprise; Type C adapters require M+O; dna_identity requires L+O only
 - **RBPC**: Role-Based Power Control — governance model binding AI agent capabilities to structured power profiles
-- **Dual-layer licensing**: MPL-2.0 (SDK, irrevocable) + Gimel Technologies ToS (proprietary services, revocable) + Apache 2.0 (RFCs, irrevocable)
+- **Three-layer licensing**: MPL-2.0 (SDK, irrevocable) + Gimel Technologies ToS (proprietary services, revocable) + Apache 2.0 (RFCs, irrevocable)
 - **No billing/telemetry**: SDK is free, no phone-home, no license key, no usage tracking
 - **Adapter types**: 8 adapter trait interfaces (PolicyDecision, OAuthEngine, Foundry, Wallet, Governance, Web3Identity, DnaIdentity, Billing)
 - **Two-tier ToS**: Tier1=Platform ToS (mpl_2_0→gimel_tos), Tier2=per-service for Type C slots

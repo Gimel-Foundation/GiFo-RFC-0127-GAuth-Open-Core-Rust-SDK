@@ -9,9 +9,9 @@ of the SDK Implementation Guide.
 
 ---
 
-## 1. Dual-Layer Licensing Model
+## 1. Three-Layer Licensing Model
 
-This SDK uses a dual-layer coexistence licensing model:
+This SDK uses a three-layer coexistence licensing model:
 
 | Layer | License | Scope | Revocable? |
 |-------|---------|-------|------------|

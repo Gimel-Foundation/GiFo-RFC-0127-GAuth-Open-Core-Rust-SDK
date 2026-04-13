@@ -119,7 +119,7 @@ GAuth uses **Role-Based Power Control (RBPC)** — a governance model that binds
 
 ## Licensing Model
 
-This SDK uses a **dual-layer coexistence** licensing model:
+This SDK uses a **three-layer coexistence** licensing model:
 
 | Layer | License | Scope | Revocable? |
 |-------|---------|-------|------------|
