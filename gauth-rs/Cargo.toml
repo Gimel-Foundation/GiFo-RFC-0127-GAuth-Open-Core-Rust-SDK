@@ -1,9 +1,9 @@
 [package]
 name = "gauth-rs"
-version = "0.1.0"
+version = "0.91.0"
 edition = "2021"
 authors = ["Gimel Foundation gGmbH i.G. <info@gimelid.com>"]
-description = "GAuth Open Core Rust SDK — AI authorization framework implementing GiFo RFCs 0110, 0111, 0115, 0116, 0117, 0118"
+description = "GAuth Open Core Rust SDK (Public Preview) — AI authorization framework implementing GiFo RFCs 0110, 0111, 0115, 0116, 0117, 0118"
 license = "MPL-2.0"
 repository = "https://github.com/Gimel-Foundation/gauth-rs"
 homepage = "https://gimelid.com"

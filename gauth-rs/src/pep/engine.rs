@@ -1,10 +1,12 @@
+// Copyright (c) 2025-2026 Gimel Foundation gGmbH i.G.
+// SPDX-License-Identifier: MPL-2.0
 use std::time::Instant;
 
 use crate::types::PoaCredential;
 use super::checks;
 use super::types::*;
 
-const PEP_VERSION: &str = "0.1.0";
+const PEP_VERSION: &str = "0.91.0";
 const PEP_INTERFACE_VERSION: &str = "1.2";
 
 pub struct PepEngine {

@@ -1,10 +1,13 @@
 # GAuth SDK Monorepo
 
-**Gimel Foundation gGmbH i.G.**
+**Gimel Foundation gGmbH i.G. — Version 0.91 (Public Preview)**
 
 [![License: MPL-2.0](https://img.shields.io/badge/License-MPL%202.0-brightgreen.svg)](https://opensource.org/licenses/MPL-2.0)
+[![Status: Public Preview](https://img.shields.io/badge/Status-Public%20Preview-blue.svg)]()
 
 The GAuth SDK implements the **GiFo GAuth authorization protocol** — a structured governance framework that enables AI systems (digital agents, agentic AI, humanoid robots) to carry, present, and enforce Power of Attorney (PoA) credentials.
+
+**This SDK is free to use.** No Gimel account, subscription, license key, or billing integration is required. There is no telemetry, no phone-home, and no usage tracking. Download from GitHub and run independently on your own infrastructure.
 
 This monorepo contains the official SDK implementations across multiple languages, all aligned with the [GAuth SDK Implementation Guide](https://gimelid.com) and GiFo RFCs 0110-0118.
 
@@ -16,7 +19,7 @@ This monorepo contains the official SDK implementations across multiple language
 .
 ├── gauth-rs/                    # Rust SDK (Open Core reference implementation)
 │   ├── src/
-│   │   ├── types/               # PoA credential schema, governance profiles, capabilities
+│   │   ├── types/               # PoA credential schema, governance profiles, RBPC
 │   │   ├── token/               # Extended Token JWT (RS256/ES256, HS256 prohibited)
 │   │   ├── pep/                 # Policy Enforcement Point — 16-check pipeline
 │   │   ├── management/          # Mandate lifecycle, license state machine, two-tier ToS
@@ -35,9 +38,9 @@ This monorepo contains the official SDK implementations across multiple language
 
 ## SDK Implementations
 
-| Language | Directory | Status | Guide Version |
-|----------|-----------|--------|---------------|
-| **Rust** | [`gauth-rs/`](gauth-rs/) | Active | v1.2 |
+| Language | Directory | Status | Version |
+|----------|-----------|--------|---------|
+| **Rust** | [`gauth-rs/`](gauth-rs/) | Public Preview | Version 0.91 |
 
 Additional SDK implementations (TypeScript, Python, Go, Java, Swift, Kotlin) will follow the same architecture and conformance requirements.
 
@@ -45,7 +48,7 @@ Additional SDK implementations (TypeScript, Python, Go, Java, Swift, Kotlin) wil
 
 ## Protocol Overview
 
-The GAuth protocol defines how AI systems operate under delegated authority:
+The GAuth protocol defines how AI systems operate under delegated authority using **Role-Based Power Control (RBPC)** — a governance model that binds AI agent capabilities to structured power profiles rather than traditional access roles:
 
 1. **Power of Attorney (PoA)** credentials encode what an AI agent is permitted to do — verbs, resources, budget limits, governance profiles, and approval modes.
 2. **Policy Enforcement Points (PEP)** evaluate every action against the PoA through a 16-check pipeline, producing Permit/Deny/Constrain decisions with full audit trails.
@@ -60,11 +63,11 @@ The GAuth protocol defines how AI systems operate under delegated authority:
 | 2 | `oauth_engine` | A | O+ | OAuth 2.0 / JWT token engine |
 | 3 | `foundry` | B | O+ | Agent foundry / sandbox management |
 | 4 | `wallet` | B | O+ | Credential wallet / VC storage |
-| 5 | `ai_governance` | C | M+ | AI-enabled governance (Exclusion 1) |
-| 6 | `web3_identity` | C | M+ | Web3/DID identity (Exclusion 2) |
-| 7 | `dna_identity` | C | L | DNA-based identity (Exclusion 3) |
+| 5 | `ai_governance` | C | M+O | AI-enabled governance (Exclusion 1) |
+| 6 | `web3_identity` | C | M+O | Web3/DID identity (Exclusion 2) |
+| 7 | `dna_identity` | C | L+O | DNA-based identity (Exclusion 3) |
 
-### Governance Profiles
+### Governance Profiles (RBPC)
 
 | Profile | Max Budget | Auto-Deploy | Min Approval | Delegation Depth |
 |---------|-----------|-------------|--------------|-----------------|
@@ -73,6 +76,18 @@ The GAuth protocol defines how AI systems operate under delegated authority:
 | Strict | 1,000 EUR | No | Supervised | 2 |
 | Enterprise | 10,000 EUR | No | Supervised | 3 |
 | Behorde | Unlimited | No | Four-Eyes | 2 |
+
+---
+
+## Tariff Overview
+
+| Tariff | Name | Description |
+|--------|------|-------------|
+| **O** | Open Core | Free SDK, self-hosted, no Gimel account needed |
+| **M+O** | Hybrid Service | SDK + proprietary managed services (G-Agents, Foundry, Wallet) |
+| **L+O** | Hybrid Enterprise | SDK + enterprise managed services with custom contract |
+
+Open Core (O) users can upgrade to M+O or L+O for managed services. For details, contact sales@gimelid.com or visit [gimelid.com](https://gimelid.com).
 
 ---
 
@@ -108,22 +123,30 @@ Every PR triggers the full CI pipeline:
 
 ## RFC References
 
-| RFC | Title |
-|-----|-------|
-| 0110 | GAuth Overview and Architecture |
-| 0111 | Power of Attorney Credential Schema |
-| 0115 | Three-Layer Capability Model |
-| 0116 | Extended Token Specification |
-| 0117 | Policy Enforcement Point (PEP) Pipeline |
-| 0118 | Management API and Adapter Architecture |
-
-**SDK Implementation Guide:** v1.2 (current), v1.3 (in review)
+| RFC | Title | License |
+|-----|-------|---------|
+| 0110 | GAuth Overview and Architecture | |
+| 0111 | Power of Attorney Credential Schema | |
+| 0115 | Three-Layer Capability Model | |
+| 0116 | Extended Token Specification | Apache 2.0 |
+| 0117 | Policy Enforcement Point (PEP) Pipeline | Apache 2.0 |
+| 0118 | Management API and Adapter Architecture | Apache 2.0 |
 
 ---
 
-## License
+## Licensing Model
 
-This project is licensed under the **Mozilla Public License 2.0** (MPL-2.0).
+This SDK uses a **dual-layer coexistence** licensing model:
+
+| Layer | License | Scope | Revocable? |
+|-------|---------|-------|------------|
+| SDK source code | MPL-2.0 | File-level copyleft on SDK files; your own files in separate modules remain under your chosen license | No — irrevocable |
+| Proprietary Gimel services | Gimel Technologies ToS | Governs access to Gimel-hosted services (AaaS, managed infrastructure, Type C adapters) | Yes — service relationship |
+| Open specifications (RFCs) | Apache 2.0 | Interoperability protocols (RFC 0116, 0117, 0118) | No — irrevocable |
+
+**In practice:** You may run the SDK in pure Open Core mode (MPL-2.0 only, self-hosted, no Gimel services) indefinitely. If you choose to use proprietary Gimel services, the Gimel Technologies ToS applies in addition to MPL-2.0 — not as a replacement. Your SDK code and modifications to SDK files remain MPL-2.0 regardless.
+
+### Exclusions
 
 The following features are **excluded** from the MPL-2.0 license and subject to separate proprietary licensing by Gimel Foundation gGmbH i.G. / Gimel Technologies GmbH:
 

@@ -1,3 +1,5 @@
+// Copyright (c) 2025-2026 Gimel Foundation gGmbH i.G.
+// SPDX-License-Identifier: MPL-2.0
 use sha2::{Digest, Sha256};
 
 pub fn canonical_json(value: &serde_json::Value) -> String {

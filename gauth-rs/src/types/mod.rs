@@ -1,3 +1,5 @@
+// Copyright (c) 2025-2026 Gimel Foundation gGmbH i.G.
+// SPDX-License-Identifier: MPL-2.0
 mod poa;
 mod governance;
 mod capabilities;

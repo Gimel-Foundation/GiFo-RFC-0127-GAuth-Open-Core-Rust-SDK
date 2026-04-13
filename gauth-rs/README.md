@@ -1,22 +1,28 @@
 # gauth-rs
 
-**GAuth Open Core Rust SDK** — AI authorization framework implementing the GiFo GAuth protocol.
+**GAuth Open Core Rust SDK — Version 0.91 (Public Preview)**
+
+AI authorization framework implementing the GiFo GAuth protocol.
 
 [![License: MPL-2.0](https://img.shields.io/badge/License-MPL%202.0-brightgreen.svg)](https://opensource.org/licenses/MPL-2.0)
+[![Status: Public Preview](https://img.shields.io/badge/Status-Public%20Preview-blue.svg)]()
 
 ## Overview
 
-`gauth-rs` implements the GiFo GAuth authorization protocol as specified in RFCs 0110-0118 and aligned with the SDK Implementation Guide v1.2. It enables AI systems — digital agents, agentic AI, humanoid robots — to carry, present, and enforce Power of Attorney (PoA) credentials under a structured governance framework.
+`gauth-rs` implements the GiFo GAuth authorization protocol as specified in RFCs 0110-0118 and aligned with the SDK Implementation Guide. It enables AI systems — digital agents, agentic AI, humanoid robots — to carry, present, and enforce Power of Attorney (PoA) credentials under a structured governance framework.
+
+This SDK is **free to use** under the Mozilla Public License 2.0. No Gimel account, subscription, license key, or billing integration is required. There is no telemetry, no phone-home, and no usage tracking. Download from GitHub and run independently on your own infrastructure.
 
 ## Architecture
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
-│                       gauth-rs SDK                          │
+│                    gauth-rs SDK Version 0.91                  │
+│                        (Public Preview)                       │
 ├──────────────┬──────────┬────────────┬──────────────────────┤
 │   types/     │  token/  │    pep/    │    management/       │
 │  PoA schema  │Extended  │ 16-check   │  Mandate lifecycle   │
-│  Governance  │  JWT     │ evaluation │  License state       │
+│  RBPC model  │  JWT     │ evaluation │  License state       │
 │  Capability  │ RS256/   │ pipeline   │  machine             │
 │  Delegation  │  ES256   │ fail-close │  Two-tier ToS        │
 ├──────────────┴──────────┴────────────┴──────────────────────┤
@@ -28,9 +34,9 @@
 │  ├────────┼────────────┼─────────┴────────┘                 │
 │  │ Slot 5 │  Slot 6    │ Slot 7           │ Type C          │
 │  │  AI    │  Web3      │ DNA Identity     │ (Proprietary)   │
-│  │  Gov   │  Identity  │ (L-tier only)    │                 │
+│  │  Gov   │  Identity  │ (L+O only)       │                 │
 │  └────────┴────────────┴──────────────────┘                 │
-│  Ed25519 signed manifests · Tariff gating (O/S/M/L)         │
+│  Ed25519 signed manifests · Tariff gating (O/M+O/L+O)       │
 ├─────────────────────────────────────────────────────────────┤
 │                       crypto/                                │
 │  Canonical JSON · SHA-256 scope checksum · Ed25519           │
@@ -41,17 +47,15 @@
 
 | Module | Description |
 |--------|-------------|
-| `types` | PoA credential schema, governance profiles (Minimal/Standard/Strict/Enterprise/Behörde), three-layer capability model (core verbs, platform permissions, budget/session limits), delegation chain |
+| `types` | PoA credential schema, governance profiles (Minimal/Standard/Strict/Enterprise/Behorde), three-layer capability model (core verbs, platform permissions, budget/session limits), delegation chain, Role-Based Power Control (RBPC) |
 | `token` | Extended Token JWT encoding/decoding with RS256/ES256 (HS256 prohibited), schema version `0116.2.2`, scope checksum verification |
-| `pep` | Policy Enforcement Point — 16-check evaluation pipeline (CHK-01 through CHK-16) with fail-closed default, batch enforcement, audit records |
+| `pep` | Policy Enforcement Point — 16-check evaluation pipeline (CHK-01 through CHK-16) with fail-closed default, stateless fail-fast / stateful collect-all modes, batch enforcement, audit records |
 | `management` | Mandate lifecycle management (DRAFT → ACTIVE → SUSPENDED/EXPIRED/REVOKED/BUDGET_EXCEEDED/SUPERSEDED), license state machine (mpl_2_0 → gimel_tos), two-tier ToS model |
-| `adapters` | 7-slot connector model with Type A/B/C/D classification, Ed25519 signed manifests, tariff gating (O/S/M/L), adapter lifecycle (null → pending → active → error) |
+| `adapters` | 7-slot connector model with Type A/B/C/D classification, Ed25519 signed manifests, tariff gating (O/M+O/L+O), adapter lifecycle (null → pending → active → error) |
 | `crypto` | Canonical JSON serialization, SHA-256 scope checksum, Ed25519 signature helpers |
 | `error` | Comprehensive error hierarchy with typed variants for each failure mode |
 
 ## 7-Slot Connector Model
-
-Per SDK Implementation Guide v1.2 §4:
 
 | Slot | Name | Type | Tariff | Description |
 |------|------|------|--------|-------------|
@@ -59,9 +63,9 @@ Per SDK Implementation Guide v1.2 §4:
 | 2 | `oauth_engine` | A | O+ | OAuth 2.0 / JWT token engine |
 | 3 | `foundry` | B | O+ | Agent foundry / sandbox management |
 | 4 | `wallet` | B | O+ | Credential wallet / VC storage |
-| 5 | `ai_governance` | C | M+ | AI-enabled governance (Exclusion 1) |
-| 6 | `web3_identity` | C | M+ | Web3/DID identity (Exclusion 2) |
-| 7 | `dna_identity` | C | L | DNA-based identity (Exclusion 3) |
+| 5 | `ai_governance` | C | M+O | AI-enabled governance (Exclusion 1) |
+| 6 | `web3_identity` | C | M+O | Web3/DID identity (Exclusion 2) |
+| 7 | `dna_identity` | C | L+O | DNA-based identity (Exclusion 3) |
 
 ## Adapter Type Classification
 
@@ -74,12 +78,23 @@ Per SDK Implementation Guide v1.2 §4:
 
 ## Tariff Gating
 
-| Tier | Name | Type C Access |
-|------|------|---------------|
-| O | Open Core | None |
-| S | Small | None |
-| M | Medium | ai_governance, web3_identity |
-| L | Large | ai_governance, web3_identity, dna_identity |
+| Tariff | Name | Type C Access | Description |
+|--------|------|---------------|-------------|
+| **O** | Open Core | None | Free SDK, self-hosted, no Gimel account needed |
+| **M+O** | Hybrid Service | ai_governance, web3_identity | SDK + proprietary managed services |
+| **L+O** | Hybrid Enterprise | ai_governance, web3_identity, dna_identity | SDK + enterprise managed services |
+
+## Governance Profiles (RBPC)
+
+GAuth uses **Role-Based Power Control (RBPC)** — a governance model that binds AI agent capabilities to structured power profiles rather than traditional access roles.
+
+| Profile | Max Budget | Auto-Deploy | Deploy Targets | Min Approval | Delegation Depth |
+|---------|-----------|-------------|----------------|--------------|-----------------|
+| Minimal | 10 EUR | Yes | dev | Autonomous | 0 |
+| Standard | 100 EUR | Yes | dev, staging | Autonomous | 1 |
+| Strict | 1,000 EUR | No | dev, staging | Supervised | 2 |
+| Enterprise | 10,000 EUR | No | dev, staging, prod | Supervised | 3 |
+| Behorde | Unlimited | No | dev, staging, prod | Four-Eyes | 2 |
 
 ## PEP Evaluation Pipeline (16 Checks)
 
@@ -102,17 +117,19 @@ Per SDK Implementation Guide v1.2 §4:
 | CHK-15 | Approval | Autonomous/Supervised/Four-Eyes mode enforcement |
 | CHK-16 | Delegation Chain | Depth limit per governance profile |
 
-## Governance Profiles
+## Licensing Model
 
-| Profile | Max Budget | Auto-Deploy | Deploy Targets | Min Approval | Delegation Depth |
-|---------|-----------|-------------|----------------|--------------|-----------------|
-| Minimal | 10 EUR | Yes | dev | Autonomous | 0 |
-| Standard | 100 EUR | Yes | dev, staging | Autonomous | 1 |
-| Strict | 1,000 EUR | No | dev, staging | Supervised | 2 |
-| Enterprise | 10,000 EUR | No | dev, staging, prod | Supervised | 3 |
-| Behörde | Unlimited | No | dev, staging, prod | Four-Eyes | 2 |
+This SDK uses a **dual-layer coexistence** licensing model:
 
-## License State Machine
+| Layer | License | Scope | Revocable? |
+|-------|---------|-------|------------|
+| SDK source code | MPL-2.0 | File-level copyleft on SDK files; your own files in separate modules remain under your chosen license | No — irrevocable |
+| Proprietary Gimel services | Gimel Technologies ToS | Governs access to Gimel-hosted services (AaaS, managed infrastructure, Type C adapters) | Yes — service relationship |
+| Open specifications (RFCs) | Apache 2.0 | Interoperability protocols (RFC 0116, 0117, 0118) | No — irrevocable |
+
+**In practice:** You may run the SDK in pure Open Core mode (MPL-2.0 only, self-hosted, no Gimel services) indefinitely. If you choose to use proprietary Gimel services, the Gimel Technologies ToS applies in addition to MPL-2.0 — not as a replacement. Your SDK code and modifications to SDK files remain MPL-2.0 regardless.
+
+### License State Machine
 
 ```
 mpl_2_0  ──(accept Platform ToS)──▶  gimel_tos
@@ -226,19 +243,14 @@ assert_eq!(decision.decision, Decision::Permit);
 - **RFC 0110** — GAuth Overview and Architecture
 - **RFC 0111** — Power of Attorney Credential Schema
 - **RFC 0115** — Three-Layer Capability Model
-- **RFC 0116** — Extended Token Specification
-- **RFC 0117** — Policy Enforcement Point (PEP) Pipeline
-- **RFC 0118** — Management API and Adapter Architecture
-- **SDK Implementation Guide v1.2** — 7-Slot Connector Model, Tariff Gating, Adapter Classification
-
-## License
-
-This project is licensed under the Mozilla Public License 2.0 — see the [LICENSE](LICENSE) file for details.
-
-**Important:** The Exclusions described above (AI-enabled Governance, Web3 Integration, DNA-based Identities and PQC) are subject to separate proprietary licensing by Gimel Foundation gGmbH i.G. / Gimel Technologies GmbH. See [ADDITIONAL-TERMS.md](ADDITIONAL-TERMS.md).
+- **RFC 0116** — Extended Token Specification (Apache 2.0)
+- **RFC 0117** — Policy Enforcement Point (PEP) Pipeline (Apache 2.0)
+- **RFC 0118** — Management API and Adapter Architecture (Apache 2.0)
+- **SDK Implementation Guide** — 7-Slot Connector Model, Tariff Gating, Adapter Classification
 
 ## Contact
 
-Gimel Foundation gGmbH i.G.  
-Email: info@gimelid.com  
+Gimel Foundation gGmbH i.G.
+Email: info@gimelid.com
+Licensing: licensing@gimelid.com
 Website: https://gimelid.com

@@ -1124,7 +1124,7 @@ fn test_pep_audit_record_present() {
     let decision = engine.enforce_action(&request, &poa);
 
     let audit = decision.audit.unwrap();
-    assert_eq!(audit.pep_version, "0.1.0");
+    assert_eq!(audit.pep_version, "0.91.0");
     assert_eq!(audit.pep_interface_version, Some("1.2".to_string()));
     assert!(audit.processing_time_ms >= 0.0);
     assert_eq!(audit.agent_id, Some("agent:test-agent-001".to_string()));

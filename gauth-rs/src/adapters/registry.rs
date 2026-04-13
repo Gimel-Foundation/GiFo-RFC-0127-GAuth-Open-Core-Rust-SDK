@@ -1,3 +1,5 @@
+// Copyright (c) 2025-2026 Gimel Foundation gGmbH i.G.
+// SPDX-License-Identifier: MPL-2.0
 use std::collections::HashMap;
 use std::sync::Arc;
 
@@ -199,7 +201,7 @@ pub fn check_tariff_gate(slot: ConnectorSlot, tariff: TariffCode) -> TariffGateR
     {
         return TariffGateResult {
             allowed: false,
-            reason: Some("Type C requires tariff M or higher".into()),
+            reason: Some("Type C requires tariff M+O (Hybrid Service) or higher".into()),
             availability,
             provenance: None,
         };

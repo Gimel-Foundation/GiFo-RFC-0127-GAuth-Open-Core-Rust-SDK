@@ -1,3 +1,5 @@
+// Copyright (c) 2025-2026 Gimel Foundation gGmbH i.G.
+// SPDX-License-Identifier: MPL-2.0
 use serde::{Deserialize, Serialize};
 
 use super::capabilities::{Budget, CoreVerbs, PlatformPermissions, SessionLimits};
