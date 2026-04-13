@@ -59,10 +59,10 @@ The GAuth protocol defines how AI systems operate under delegated authority usin
 
 | Slot | Name | Type | Tariff | Description |
 |------|------|------|--------|-------------|
-| 1 | `pdp` | Internal | O+ | Policy Decision Point (SDK-embedded) |
-| 2 | `oauth_engine` | A | O+ | OAuth 2.0 / JWT token engine |
-| 3 | `foundry` | B | O+ | Agent foundry / sandbox management |
-| 4 | `wallet` | B | O+ | Credential wallet / VC storage |
+| 1 | `pdp` | Internal | O (all tiers) | Policy Decision Point (SDK-embedded) |
+| 2 | `oauth_engine` | A | O (all tiers) | OAuth 2.0 / JWT token engine |
+| 3 | `foundry` | B | O (all tiers) | Agent foundry / sandbox management |
+| 4 | `wallet` | B | O (all tiers) | Credential wallet / VC storage |
 | 5 | `ai_governance` | C | M+O | AI-enabled governance (Exclusion 1) |
 | 6 | `web3_identity` | C | M+O | Web3/DID identity (Exclusion 2) |
 | 7 | `dna_identity` | C | L+O | DNA-based identity (Exclusion 3) |
@@ -125,9 +125,9 @@ Every PR triggers the full CI pipeline:
 
 | RFC | Title | License |
 |-----|-------|---------|
-| 0110 | GAuth Overview and Architecture | |
-| 0111 | Power of Attorney Credential Schema | |
-| 0115 | Three-Layer Capability Model | |
+| 0110 | GAuth Overview and Architecture | Gimel Foundation |
+| 0111 | Power of Attorney Credential Schema | Gimel Foundation |
+| 0115 | Three-Layer Capability Model | Gimel Foundation |
 | 0116 | Extended Token Specification | Apache 2.0 |
 | 0117 | Policy Enforcement Point (PEP) Pipeline | Apache 2.0 |
 | 0118 | Management API and Adapter Architecture | Apache 2.0 |

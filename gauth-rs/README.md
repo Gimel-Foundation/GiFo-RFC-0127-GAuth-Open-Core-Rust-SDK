@@ -59,10 +59,10 @@ This SDK is **free to use** under the Mozilla Public License 2.0. No Gimel accou
 
 | Slot | Name | Type | Tariff | Description |
 |------|------|------|--------|-------------|
-| 1 | `pdp` | Internal | O+ | Policy Decision Point (SDK-embedded) |
-| 2 | `oauth_engine` | A | O+ | OAuth 2.0 / JWT token engine |
-| 3 | `foundry` | B | O+ | Agent foundry / sandbox management |
-| 4 | `wallet` | B | O+ | Credential wallet / VC storage |
+| 1 | `pdp` | Internal | O (all tiers) | Policy Decision Point (SDK-embedded) |
+| 2 | `oauth_engine` | A | O (all tiers) | OAuth 2.0 / JWT token engine |
+| 3 | `foundry` | B | O (all tiers) | Agent foundry / sandbox management |
+| 4 | `wallet` | B | O (all tiers) | Credential wallet / VC storage |
 | 5 | `ai_governance` | C | M+O | AI-enabled governance (Exclusion 1) |
 | 6 | `web3_identity` | C | M+O | Web3/DID identity (Exclusion 2) |
 | 7 | `dna_identity` | C | L+O | DNA-based identity (Exclusion 3) |
