@@ -146,6 +146,25 @@ fn narrow_tool_constraints(policy: &mut ToolPolicy, child: &serde_json::Value) {
             None => child_strs,
         });
     }
+
+    if let Some(child_denied) = child.get("denied_commands").and_then(|v| v.as_array()) {
+        let child_strs: Vec<String> = child_denied
+            .iter()
+            .filter_map(|v| v.as_str().map(String::from))
+            .collect();
+        constraints.denied_commands = Some(match &constraints.denied_commands {
+            Some(parent_denied) => {
+                let mut merged = parent_denied.clone();
+                for cmd in &child_strs {
+                    if !merged.contains(cmd) {
+                        merged.push(cmd.clone());
+                    }
+                }
+                merged
+            }
+            None => child_strs,
+        });
+    }
 }
 
 pub struct MandateManager {
@@ -658,8 +677,7 @@ impl MandateManager {
 
         let narrowed_scope = narrow_scope(&parent.scope, &request.scope_restriction);
 
-        let requires_approval = parent.scope.governance_profile.minimum_approval_mode()
-            >= ApprovalMode::Supervised;
+        let requires_approval = parent.scope.governance_profile.approval_required_for_delegation();
 
         let initial_status = if requires_approval {
             MandateStatus::PendingApproval

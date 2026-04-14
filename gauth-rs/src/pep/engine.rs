@@ -1,7 +1,9 @@
 // Copyright (c) 2025-2026 Gimel Foundation gGmbH i.G.
 // SPDX-License-Identifier: MPL-2.0
+use std::sync::Arc;
 use std::time::Instant;
 
+use crate::adapters::{OAuthEngineAdapter, ConnectorSlotRegistry, LicenseComplianceViolation};
 use crate::types::PoaCredential;
 use super::checks;
 use super::types::*;
@@ -11,19 +13,71 @@ const PEP_INTERFACE_VERSION: &str = "1.2";
 
 pub struct PepEngine {
     pub mode: EnforcementMode,
+    oauth_adapter: Option<Arc<dyn OAuthEngineAdapter>>,
 }
 
 impl Default for PepEngine {
     fn default() -> Self {
         Self {
             mode: EnforcementMode::Stateless,
+            oauth_adapter: None,
         }
     }
 }
 
 impl PepEngine {
     pub fn new(mode: EnforcementMode) -> Self {
-        Self { mode }
+        Self {
+            mode,
+            oauth_adapter: None,
+        }
+    }
+
+    pub fn with_oauth_adapter(mut self, adapter: Arc<dyn OAuthEngineAdapter>) -> Self {
+        self.oauth_adapter = Some(adapter);
+        self
+    }
+
+    pub fn check_compliance(registry: &ConnectorSlotRegistry) -> Vec<LicenseComplianceViolation> {
+        registry.check_license_compliance()
+    }
+
+    pub fn enforce_compliance(registry: &ConnectorSlotRegistry) -> Option<EnforcementDecision> {
+        let violations = registry.check_license_compliance();
+        if violations.is_empty() {
+            return None;
+        }
+        let pep_violations: Vec<Violation> = violations
+            .iter()
+            .map(|v| Violation {
+                code: v.violation_code.clone(),
+                message: v.message.clone(),
+                check_id: "LICENSE-COMPLIANCE".into(),
+                severity: ViolationSeverity::Error,
+            })
+            .collect();
+        Some(EnforcementDecision {
+            request_id: String::new(),
+            decision: Decision::Deny,
+            timestamp: chrono::Utc::now(),
+            enforcement_mode: EnforcementMode::Stateless,
+            checks: vec![],
+            enforced_constraints: None,
+            violations: Some(pep_violations),
+            audit: Some(AuditRecord {
+                processing_time_ms: 0.0,
+                pep_version: PEP_VERSION.into(),
+                pep_interface_version: Some(PEP_INTERFACE_VERSION.into()),
+                credential_jti: None,
+                mandate_id: None,
+                agent_id: None,
+                action_verb: None,
+                action_resource: None,
+                checks_performed: Some(0),
+                checks_passed: Some(0),
+                checks_failed: Some(violations.len() as i32),
+            }),
+        })
     }
 
     pub fn pre_validate_token(credential: &CredentialReference) -> Option<EnforcementDecision> {
@@ -106,6 +160,21 @@ impl PepEngine {
             early_deny.request_id = request.request_id.clone();
             early_deny.enforcement_mode = self.mode.clone();
             return early_deny;
+        }
+
+        if let Some(ref oauth) = self.oauth_adapter {
+            if let Some(ref token) = request.credential.token {
+                if let Err(e) = oauth.validate_token(token) {
+                    let mut deny = Self::deny_early(
+                        request.credential.mandate_id.as_deref(),
+                        "TOKEN_VALIDATION_FAILED",
+                        &format!("OAuth adapter token validation failed: {e}"),
+                    );
+                    deny.request_id = request.request_id.clone();
+                    deny.enforcement_mode = self.mode.clone();
+                    return deny;
+                }
+            }
         }
 
         let start = Instant::now();

@@ -57,6 +57,15 @@ impl GovernanceProfile {
         )
     }
 
+    pub fn approval_required_for_delegation(&self) -> bool {
+        matches!(
+            self,
+            GovernanceProfile::Strict
+                | GovernanceProfile::Enterprise
+                | GovernanceProfile::Behoerde
+        )
+    }
+
     pub fn max_delegation_depth(&self) -> u32 {
         match self {
             GovernanceProfile::Minimal => 0,

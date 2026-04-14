@@ -2659,6 +2659,156 @@ fn ct_lic_013_check_license_compliance_detects_violations() {
 }
 
 #[test]
+fn ct_pep_042_oauth_adapter_validation_rejects_invalid_token() {
+    use std::sync::Arc;
+
+    struct RejectingOAuth;
+    impl gauth_rs::adapters::OAuthEngineAdapter for RejectingOAuth {
+        fn issue_token(
+            &self,
+            _claims: &serde_json::Value,
+            _options: &serde_json::Value,
+        ) -> gauth_rs::error::Result<gauth_rs::adapters::SignedJwt> {
+            unimplemented!()
+        }
+        fn validate_token(&self, _token: &str) -> gauth_rs::error::Result<gauth_rs::adapters::TokenValidation> {
+            Err(gauth_rs::error::GAuthError::CredentialIntegrity("Token signature invalid".into()))
+        }
+        fn revoke_token(&self, _id: &str, _reason: &str) -> gauth_rs::error::Result<gauth_rs::adapters::RevocationResult> {
+            unimplemented!()
+        }
+        fn get_jwks(&self) -> gauth_rs::error::Result<serde_json::Value> {
+            unimplemented!()
+        }
+        fn introspect(&self, _token: &str) -> gauth_rs::error::Result<gauth_rs::adapters::IntrospectionResult> {
+            unimplemented!()
+        }
+        fn before_token_issuance(&self, claims: &serde_json::Value) -> gauth_rs::error::Result<serde_json::Value> {
+            Ok(claims.clone())
+        }
+        fn after_token_issuance(&self, _jwt: &gauth_rs::adapters::SignedJwt, _claims: &serde_json::Value) -> gauth_rs::error::Result<()> {
+            Ok(())
+        }
+        fn health_check(&self) -> gauth_rs::error::Result<gauth_rs::adapters::AdapterHealthResult> {
+            Ok(gauth_rs::adapters::AdapterHealthResult {
+                healthy: true,
+                latency_ms: 0.0,
+                details: None,
+            })
+        }
+    }
+
+    let engine = PepEngine::new(EnforcementMode::Stateless)
+        .with_oauth_adapter(Arc::new(RejectingOAuth));
+    let poa = make_standard_poa();
+
+    let header = base64::Engine::encode(
+        &base64::engine::general_purpose::URL_SAFE_NO_PAD,
+        r#"{"alg":"RS256","typ":"JWT"}"#,
+    );
+    let payload = base64::Engine::encode(
+        &base64::engine::general_purpose::URL_SAFE_NO_PAD,
+        r#"{"sub":"test"}"#,
+    );
+    let fake_token = format!("{header}.{payload}.fakesig");
+
+    let mut request = make_enforcement_request("file.read", "src/main.rs", "agent:test-agent-001");
+    request.credential.token = Some(fake_token);
+
+    let decision = engine.enforce_action(&request, &poa);
+    assert_eq!(decision.decision, Decision::Deny);
+    let violations = decision.violations.unwrap();
+    assert!(violations.iter().any(|v| v.code == "TOKEN_VALIDATION_FAILED"));
+}
+
+#[test]
+fn ct_lic_014_enforce_compliance_returns_deny_for_violations() {
+    let registry = ConnectorSlotRegistry::new(TariffCode::O);
+    let result = PepEngine::enforce_compliance(&registry);
+    assert!(result.is_none(), "Clean registry should return None");
+}
+
+#[test]
+fn ct_ar_004_mandatory_slot_unregister_error_code() {
+    let mut registry = ConnectorSlotRegistry::new(TariffCode::O);
+    let result = registry.unregister(ConnectorSlot::Pdp);
+    assert!(result.is_err());
+    let err = result.unwrap_err();
+    match err {
+        gauth_rs::error::GAuthError::MandatorySlotProtected(msg) => {
+            assert!(msg.contains("MANDATORY_SLOT_PROTECTED"));
+        }
+        other => panic!("Expected MandatorySlotProtected, got: {other}"),
+    }
+}
+
+#[test]
+fn ct_pp07_denied_commands_union_narrowing() {
+    let mut manager = MandateManager::new();
+
+    let mut scope = make_standard_scope();
+    scope.allowed_regions = Some(vec!["DE".into()]);
+
+    let create_resp = manager.create_mandate(MandateCreationRequest {
+        parties: Parties {
+            issuer: "platform:test".into(),
+            subject: "agent:parent".into(),
+            customer_id: "cust_test".into(),
+            project_id: "proj_test".into(),
+            issued_by: None,
+            approval_chain: None,
+        },
+        scope,
+        requirements: Requirements {
+            approval_mode: ApprovalMode::Autonomous,
+            budget: Some(Budget {
+                total_cents: Some(5000),
+                remaining_cents: Some(5000),
+            }),
+            session_limits: None,
+            ttl_seconds: Some(3600),
+        },
+    }).unwrap();
+
+    manager.activate_mandate(MandateActivationRequest {
+        mandate_id: create_resp.mandate_id.clone(),
+        activated_by: "admin".into(),
+    }).unwrap();
+
+    let child_id = manager.delegate_mandate(DelegationRequest {
+        parent_mandate_id: create_resp.mandate_id,
+        delegate_agent_id: "agent:child".into(),
+        scope_restriction: serde_json::json!({
+            "core_verbs": {
+                "command.run": {
+                    "allowed": true,
+                    "constraints": {
+                        "denied_commands": ["shutdown", "halt"]
+                    }
+                }
+            }
+        }),
+        delegated_by: "agent:parent".into(),
+    }).unwrap();
+
+    let child = manager.get_mandate(&child_id).unwrap();
+    let cmd_policy = child.scope.core_verbs.get("command.run").unwrap();
+    let denied = cmd_policy.constraints.as_ref().unwrap().denied_commands.as_ref().unwrap();
+    assert!(denied.contains(&"rm".to_string()), "Parent denied 'rm' must be preserved");
+    assert!(denied.contains(&"shutdown".to_string()), "Child denied 'shutdown' must be added");
+    assert!(denied.contains(&"halt".to_string()), "Child denied 'halt' must be added");
+}
+
+#[test]
+fn ct_dc_005_approval_required_for_delegation_profile() {
+    assert!(!GovernanceProfile::Minimal.approval_required_for_delegation());
+    assert!(!GovernanceProfile::Standard.approval_required_for_delegation());
+    assert!(GovernanceProfile::Strict.approval_required_for_delegation());
+    assert!(GovernanceProfile::Enterprise.approval_required_for_delegation());
+    assert!(GovernanceProfile::Behoerde.approval_required_for_delegation());
+}
+
+#[test]
 fn ct_pep_039_per_verb_delegation_depth_passes_when_within_limit() {
     let mut poa = make_standard_poa();
     poa.scope.core_verbs.insert(

@@ -91,6 +91,9 @@ pub enum GAuthError {
     #[error("Adapter registration failed: {0}")]
     AdapterRegistrationFailed(String),
 
+    #[error("Cannot unregister mandatory slot: {0}")]
+    MandatorySlotProtected(String),
+
     #[error("Adapter signature verification failed: {0}")]
     AdapterSignatureInvalid(String),
 

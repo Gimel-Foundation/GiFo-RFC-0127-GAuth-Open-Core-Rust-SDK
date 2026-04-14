@@ -57,7 +57,7 @@ See the `pnpm-workspace` skill for workspace structure, TypeScript setup, and pa
 
 ### Commands
 - `cd gauth-rs && cargo build` — build the SDK
-- `cd gauth-rs && cargo test` — run tests (100 tests: 4 unit + 96 integration)
+- `cd gauth-rs && cargo test` — run tests (105 tests: 4 unit + 101 integration)
 - `cd gauth-rs && cargo clippy` — lint check (zero warnings)
 
 ### Root-Level Files

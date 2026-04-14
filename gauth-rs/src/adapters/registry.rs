@@ -487,8 +487,8 @@ impl ConnectorSlotRegistry {
 
     pub fn unregister(&mut self, slot: ConnectorSlot) -> Result<()> {
         if slot.is_mandatory() {
-            return Err(GAuthError::AdapterRegistrationFailed(format!(
-                "Cannot unregister {slot} — it is mandatory"
+            return Err(GAuthError::MandatorySlotProtected(format!(
+                "MANDATORY_SLOT_PROTECTED: Cannot unregister {slot}"
             )));
         }
 
