@@ -153,15 +153,11 @@ fn narrow_tool_constraints(policy: &mut ToolPolicy, child: &serde_json::Value) {
             .filter_map(|v| v.as_str().map(String::from))
             .collect();
         constraints.denied_commands = Some(match &constraints.denied_commands {
-            Some(parent_denied) => {
-                let mut merged = parent_denied.clone();
-                for cmd in &child_strs {
-                    if !merged.contains(cmd) {
-                        merged.push(cmd.clone());
-                    }
-                }
-                merged
-            }
+            Some(parent_denied) => parent_denied
+                .iter()
+                .filter(|c| child_strs.contains(c))
+                .cloned()
+                .collect(),
             None => child_strs,
         });
     }
@@ -677,7 +673,8 @@ impl MandateManager {
 
         let narrowed_scope = narrow_scope(&parent.scope, &request.scope_restriction);
 
-        let requires_approval = parent.scope.governance_profile.approval_required_for_delegation();
+        let requires_approval = parent.requirements.approval_mode >= ApprovalMode::Supervised
+            || parent.scope.governance_profile.approval_required_for_delegation();
 
         let initial_status = if requires_approval {
             MandateStatus::PendingApproval

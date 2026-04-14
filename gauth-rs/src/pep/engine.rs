@@ -14,6 +14,7 @@ const PEP_INTERFACE_VERSION: &str = "1.2";
 pub struct PepEngine {
     pub mode: EnforcementMode,
     oauth_adapter: Option<Arc<dyn OAuthEngineAdapter>>,
+    registry: Option<Arc<ConnectorSlotRegistry>>,
 }
 
 impl Default for PepEngine {
@@ -21,6 +22,7 @@ impl Default for PepEngine {
         Self {
             mode: EnforcementMode::Stateless,
             oauth_adapter: None,
+            registry: None,
         }
     }
 }
@@ -30,11 +32,17 @@ impl PepEngine {
         Self {
             mode,
             oauth_adapter: None,
+            registry: None,
         }
     }
 
     pub fn with_oauth_adapter(mut self, adapter: Arc<dyn OAuthEngineAdapter>) -> Self {
         self.oauth_adapter = Some(adapter);
+        self
+    }
+
+    pub fn with_registry(mut self, registry: Arc<ConnectorSlotRegistry>) -> Self {
+        self.registry = Some(registry);
         self
     }
 
@@ -156,6 +164,14 @@ impl PepEngine {
         request: &EnforcementRequest,
         poa: &PoaCredential,
     ) -> EnforcementDecision {
+        if let Some(ref registry) = self.registry {
+            if let Some(mut deny) = Self::enforce_compliance(registry) {
+                deny.request_id = request.request_id.clone();
+                deny.enforcement_mode = self.mode.clone();
+                return deny;
+            }
+        }
+
         if let Some(mut early_deny) = Self::pre_validate_token(&request.credential) {
             early_deny.request_id = request.request_id.clone();
             early_deny.enforcement_mode = self.mode.clone();

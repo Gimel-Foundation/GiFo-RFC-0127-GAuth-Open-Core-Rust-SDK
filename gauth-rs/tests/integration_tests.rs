@@ -2743,7 +2743,7 @@ fn ct_ar_004_mandatory_slot_unregister_error_code() {
 }
 
 #[test]
-fn ct_pp07_denied_commands_union_narrowing() {
+fn ct_pp07_denied_commands_intersection_narrowing() {
     let mut manager = MandateManager::new();
 
     let mut scope = make_standard_scope();
@@ -2783,7 +2783,7 @@ fn ct_pp07_denied_commands_union_narrowing() {
                 "command.run": {
                     "allowed": true,
                     "constraints": {
-                        "denied_commands": ["shutdown", "halt"]
+                        "denied_commands": ["rm", "shutdown"]
                     }
                 }
             }
@@ -2794,9 +2794,9 @@ fn ct_pp07_denied_commands_union_narrowing() {
     let child = manager.get_mandate(&child_id).unwrap();
     let cmd_policy = child.scope.core_verbs.get("command.run").unwrap();
     let denied = cmd_policy.constraints.as_ref().unwrap().denied_commands.as_ref().unwrap();
-    assert!(denied.contains(&"rm".to_string()), "Parent denied 'rm' must be preserved");
-    assert!(denied.contains(&"shutdown".to_string()), "Child denied 'shutdown' must be added");
-    assert!(denied.contains(&"halt".to_string()), "Child denied 'halt' must be added");
+    assert_eq!(denied.len(), 1, "Intersection should keep only common denied commands");
+    assert!(denied.contains(&"rm".to_string()), "Common denied command 'rm' must be in intersection");
+    assert!(!denied.contains(&"shutdown".to_string()), "'shutdown' was not in parent, removed by intersection");
 }
 
 #[test]
@@ -2839,4 +2839,72 @@ fn ct_pep_039_per_verb_delegation_depth_passes_when_within_limit() {
     let request = make_enforcement_request("delegate.task", "src/main.rs", "agent:test-agent-001");
     let decision = engine.enforce_action(&request, &poa);
     assert_eq!(decision.decision, Decision::Permit);
+}
+
+#[test]
+fn ct_dc_006_approval_mode_supervised_triggers_pending_on_standard_profile() {
+    let mut manager = MandateManager::new();
+
+    let mut scope = make_standard_scope();
+    scope.allowed_regions = Some(vec!["DE".into()]);
+
+    let create_resp = manager.create_mandate(MandateCreationRequest {
+        parties: Parties {
+            issuer: "platform:test".into(),
+            subject: "agent:parent".into(),
+            customer_id: "cust_test".into(),
+            project_id: "proj_test".into(),
+            issued_by: None,
+            approval_chain: None,
+        },
+        scope,
+        requirements: Requirements {
+            approval_mode: ApprovalMode::Supervised,
+            budget: Some(Budget {
+                total_cents: Some(5000),
+                remaining_cents: Some(5000),
+            }),
+            session_limits: None,
+            ttl_seconds: Some(3600),
+        },
+    }).unwrap();
+
+    manager.activate_mandate(MandateActivationRequest {
+        mandate_id: create_resp.mandate_id.clone(),
+        activated_by: "admin".into(),
+    }).unwrap();
+
+    let child_id = manager.delegate_mandate(DelegationRequest {
+        parent_mandate_id: create_resp.mandate_id,
+        delegate_agent_id: "agent:child".into(),
+        scope_restriction: serde_json::json!({}),
+        delegated_by: "agent:parent".into(),
+    }).unwrap();
+
+    let child = manager.get_mandate(&child_id).unwrap();
+    assert_eq!(child.status, MandateStatus::PendingApproval,
+        "Standard profile with Supervised approval_mode must produce PendingApproval");
+}
+
+#[test]
+fn ct_pep_040_registry_compliance_wired_to_enforce_action() {
+    let registry = ConnectorSlotRegistry::new(TariffCode::O);
+
+    let engine = PepEngine::new(EnforcementMode::Stateless)
+        .with_registry(Arc::new(registry));
+
+    let poa = make_standard_poa();
+    let request = make_enforcement_request("file.read", "src/main.rs", "agent:test-agent-001");
+    let decision = engine.enforce_action(&request, &poa);
+
+    assert_eq!(decision.decision, Decision::Permit,
+        "Compliant registry should not block enforcement");
+}
+
+#[test]
+fn ct_pep_041_enforce_compliance_static_detects_violations() {
+    let violations = PepEngine::enforce_compliance(
+        &ConnectorSlotRegistry::new(TariffCode::O),
+    );
+    assert!(violations.is_none(), "Clean registry must produce no violations");
 }
