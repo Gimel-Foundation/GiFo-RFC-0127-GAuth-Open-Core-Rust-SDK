@@ -55,6 +55,7 @@ impl PepEngine {
         if violations.is_empty() {
             return None;
         }
+        let violation_count = violations.len() as i32;
         let pep_violations: Vec<Violation> = violations
             .iter()
             .map(|v| Violation {
@@ -64,12 +65,21 @@ impl PepEngine {
                 severity: ViolationSeverity::Error,
             })
             .collect();
+        let compliance_check = CheckResult {
+            check_id: "LICENSE-COMPLIANCE".into(),
+            check_name: "License Compliance".into(),
+            result: CheckOutcome::Fail,
+            detail: Some(format!(
+                "{violation_count} license compliance violation(s) detected"
+            )),
+            failure_code: Some("LICENSE_COMPLIANCE_VIOLATION".into()),
+        };
         Some(EnforcementDecision {
             request_id: String::new(),
             decision: Decision::Deny,
             timestamp: chrono::Utc::now(),
             enforcement_mode: EnforcementMode::Stateless,
-            checks: vec![],
+            checks: vec![compliance_check],
             enforced_constraints: None,
             violations: Some(pep_violations),
             audit: Some(AuditRecord {
@@ -81,9 +91,9 @@ impl PepEngine {
                 agent_id: None,
                 action_verb: None,
                 action_resource: None,
-                checks_performed: Some(0),
+                checks_performed: Some(1),
                 checks_passed: Some(0),
-                checks_failed: Some(violations.len() as i32),
+                checks_failed: Some(violation_count),
             }),
         })
     }
@@ -180,15 +190,29 @@ impl PepEngine {
 
         if let Some(ref oauth) = self.oauth_adapter {
             if let Some(ref token) = request.credential.token {
-                if let Err(e) = oauth.validate_token(token) {
-                    let mut deny = Self::deny_early(
-                        request.credential.mandate_id.as_deref(),
-                        "TOKEN_VALIDATION_FAILED",
-                        &format!("OAuth adapter token validation failed: {e}"),
-                    );
-                    deny.request_id = request.request_id.clone();
-                    deny.enforcement_mode = self.mode.clone();
-                    return deny;
+                match oauth.validate_token(token) {
+                    Err(e) => {
+                        let mut deny = Self::deny_early(
+                            request.credential.mandate_id.as_deref(),
+                            "TOKEN_VALIDATION_FAILED",
+                            &format!("OAuth adapter token validation failed: {e}"),
+                        );
+                        deny.request_id = request.request_id.clone();
+                        deny.enforcement_mode = self.mode.clone();
+                        return deny;
+                    }
+                    Ok(validation) if !validation.valid => {
+                        let reason = validation.error.unwrap_or_else(|| "Token invalid".into());
+                        let mut deny = Self::deny_early(
+                            request.credential.mandate_id.as_deref(),
+                            "TOKEN_VALIDATION_FAILED",
+                            &format!("OAuth token validation rejected: {reason}"),
+                        );
+                        deny.request_id = request.request_id.clone();
+                        deny.enforcement_mode = self.mode.clone();
+                        return deny;
+                    }
+                    Ok(_) => {}
                 }
             }
         }

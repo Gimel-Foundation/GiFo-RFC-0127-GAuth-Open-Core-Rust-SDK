@@ -2722,6 +2722,77 @@ fn ct_pep_042_oauth_adapter_validation_rejects_invalid_token() {
 }
 
 #[test]
+fn ct_pep_043_oauth_adapter_valid_false_denies_before_pipeline() {
+    use std::sync::Arc;
+
+    struct InvalidTokenOAuth;
+    impl gauth_rs::adapters::OAuthEngineAdapter for InvalidTokenOAuth {
+        fn issue_token(
+            &self,
+            _claims: &serde_json::Value,
+            _options: &serde_json::Value,
+        ) -> gauth_rs::error::Result<gauth_rs::adapters::SignedJwt> {
+            unimplemented!()
+        }
+        fn validate_token(&self, _token: &str) -> gauth_rs::error::Result<gauth_rs::adapters::TokenValidation> {
+            Ok(gauth_rs::adapters::TokenValidation {
+                valid: false,
+                claims: None,
+                error: Some("Token expired".into()),
+            })
+        }
+        fn revoke_token(&self, _id: &str, _reason: &str) -> gauth_rs::error::Result<gauth_rs::adapters::RevocationResult> {
+            unimplemented!()
+        }
+        fn get_jwks(&self) -> gauth_rs::error::Result<serde_json::Value> {
+            unimplemented!()
+        }
+        fn introspect(&self, _token: &str) -> gauth_rs::error::Result<gauth_rs::adapters::IntrospectionResult> {
+            unimplemented!()
+        }
+        fn before_token_issuance(&self, claims: &serde_json::Value) -> gauth_rs::error::Result<serde_json::Value> {
+            Ok(claims.clone())
+        }
+        fn after_token_issuance(&self, _jwt: &gauth_rs::adapters::SignedJwt, _claims: &serde_json::Value) -> gauth_rs::error::Result<()> {
+            Ok(())
+        }
+        fn health_check(&self) -> gauth_rs::error::Result<gauth_rs::adapters::AdapterHealthResult> {
+            Ok(gauth_rs::adapters::AdapterHealthResult {
+                healthy: true,
+                latency_ms: 0.0,
+                details: None,
+            })
+        }
+    }
+
+    let engine = PepEngine::new(EnforcementMode::Stateless)
+        .with_oauth_adapter(Arc::new(InvalidTokenOAuth));
+    let poa = make_standard_poa();
+
+    let header = base64::Engine::encode(
+        &base64::engine::general_purpose::URL_SAFE_NO_PAD,
+        r#"{"alg":"RS256","typ":"JWT"}"#,
+    );
+    let payload = base64::Engine::encode(
+        &base64::engine::general_purpose::URL_SAFE_NO_PAD,
+        r#"{"sub":"test"}"#,
+    );
+    let fake_token = format!("{header}.{payload}.fakesig");
+
+    let mut request = make_enforcement_request("file.read", "src/main.rs", "agent:test-agent-001");
+    request.credential.token = Some(fake_token);
+
+    let decision = engine.enforce_action(&request, &poa);
+    assert_eq!(decision.decision, Decision::Deny,
+        "Ok(valid=false) must deny before pipeline");
+    let violations = decision.violations.unwrap();
+    assert!(violations.iter().any(|v| v.code == "TOKEN_VALIDATION_FAILED"),
+        "Must report TOKEN_VALIDATION_FAILED code");
+    assert!(violations.iter().any(|v| v.message.contains("Token expired")),
+        "Must include reason from TokenValidation.error");
+}
+
+#[test]
 fn ct_lic_014_enforce_compliance_returns_deny_for_violations() {
     let registry = ConnectorSlotRegistry::new(TariffCode::O);
     let result = PepEngine::enforce_compliance(&registry);
