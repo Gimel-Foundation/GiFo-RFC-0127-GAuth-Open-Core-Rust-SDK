@@ -1,6 +1,7 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
+use ed25519_dalek::Signer;
 use gauth_rs::adapters::*;
 use gauth_rs::crypto;
 use gauth_rs::error::GAuthError;
@@ -391,7 +392,7 @@ fn test_pep_verb_constraint_file_size_exceeded() {
 
     assert_eq!(decision.decision, Decision::Deny);
     let violations = decision.violations.unwrap();
-    assert!(violations.iter().any(|v| v.code == "CONSTRAINT_VIOLATED"));
+    assert!(violations.iter().any(|v| v.code == "CONSTRAINT_VIOLATED:max_file_size_bytes"));
 }
 
 #[test]
@@ -1907,4 +1908,785 @@ fn test_chk02_credential_superseded_code() {
     assert_eq!(decision.decision, Decision::Deny);
     let violations = decision.violations.unwrap();
     assert!(violations.iter().any(|v| v.code == "CREDENTIAL_SUPERSEDED"), "Expected CREDENTIAL_SUPERSEDED code");
+}
+
+#[test]
+fn ct_lic_010_change_tariff_deactivates_non_compliant() {
+    let mut registry = ConnectorSlotRegistry::new(TariffCode::L);
+    registry.register(ConnectorSlot::OauthEngine, "oauth-impl").unwrap();
+    registry.register(ConnectorSlot::Foundry, "foundry-impl").unwrap();
+    assert_eq!(registry.slot_status(ConnectorSlot::OauthEngine).status, SlotStatus::Active);
+    assert_eq!(registry.slot_status(ConnectorSlot::Foundry).status, SlotStatus::Active);
+
+    let events = registry.change_tariff(TariffCode::O);
+    assert_eq!(registry.tariff(), TariffCode::O);
+    assert_eq!(registry.slot_status(ConnectorSlot::OauthEngine).status, SlotStatus::Active);
+    assert_eq!(registry.slot_status(ConnectorSlot::Foundry).status, SlotStatus::Active);
+    assert!(events.is_empty() || events.iter().all(|e| e.slot != ConnectorSlot::Foundry && e.slot != ConnectorSlot::OauthEngine));
+}
+
+#[test]
+fn ct_lic_011_change_tariff_deactivates_type_c_on_downgrade() {
+    let mut registry = ConnectorSlotRegistry::new(TariffCode::M);
+
+    let signing_key = ed25519_dalek::SigningKey::generate(&mut rand::rngs::OsRng);
+    let verifying_key = signing_key.verifying_key();
+    registry.add_trusted_key(verifying_key);
+    let pub_hex = hex::encode(verifying_key.as_bytes());
+
+    let now = chrono::Utc::now();
+    let manifest = AdapterManifest {
+        manifest_version: "1.0".into(),
+        adapter_name: "test-ai-gov".into(),
+        adapter_type: "C".into(),
+        adapter_version: "1.0.0".into(),
+        slot_name: "ai_governance".into(),
+        namespace: "@gimel/ai-governance".into(),
+        issued_at: (now - chrono::Duration::hours(1)).to_rfc3339(),
+        expires_at: (now + chrono::Duration::days(30)).to_rfc3339(),
+        issuer: "gimel-foundation".into(),
+        capabilities: None,
+        checksum: None,
+        public_key: pub_hex,
+        signature: None,
+    };
+
+    let canonical = gauth_rs::crypto::canonical_json(
+        &serde_json::to_value(&manifest).unwrap(),
+    );
+    let sig = signing_key.sign(canonical.as_bytes());
+
+    registry.register_with_manifest(ConnectorSlot::AiGovernance, &manifest, &sig.to_bytes()).unwrap();
+    assert_eq!(registry.slot_status(ConnectorSlot::AiGovernance).status, SlotStatus::Active);
+
+    let events = registry.change_tariff(TariffCode::O);
+    assert_eq!(registry.slot_status(ConnectorSlot::AiGovernance).status, SlotStatus::Null);
+    assert!(!events.is_empty());
+    assert!(events.iter().any(|e| e.slot == ConnectorSlot::AiGovernance));
+}
+
+#[test]
+fn ct_lic_012_check_license_compliance_clean() {
+    let registry = ConnectorSlotRegistry::new(TariffCode::O);
+    let violations = registry.check_license_compliance();
+    assert!(violations.is_empty());
+}
+
+#[test]
+fn ct_pep_032_per_verb_max_delegation_depth() {
+    let mut poa = make_standard_poa();
+    poa.scope.core_verbs.insert(
+        "delegate.task".to_string(),
+        ToolPolicy {
+            allowed: true,
+            cost_cents_base: None,
+            constraints: Some(ToolConstraints {
+                path_patterns: None,
+                allowed_commands: None,
+                denied_commands: None,
+                max_delegation_depth: Some(1),
+                max_file_size_bytes: None,
+            }),
+        },
+    );
+    poa.delegation_chain = Some(vec![
+        DelegationLink {
+            delegator: "agent:root".into(),
+            delegate: "agent:test-agent-001".into(),
+            scope_restriction: serde_json::Value::Null,
+            delegated_at: None,
+            max_depth_remaining: Some(0),
+        },
+        DelegationLink {
+            delegator: "agent:test-agent-001".into(),
+            delegate: "agent:sub".into(),
+            scope_restriction: serde_json::Value::Null,
+            delegated_at: None,
+            max_depth_remaining: Some(0),
+        },
+    ]);
+
+    let engine = PepEngine::new(EnforcementMode::Stateful);
+    let request = make_enforcement_request("delegate.task", "src/main.rs", "agent:test-agent-001");
+    let decision = engine.enforce_action(&request, &poa);
+    assert_eq!(decision.decision, Decision::Deny);
+    let violations = decision.violations.unwrap();
+    assert!(violations.iter().any(|v| v.code == "CONSTRAINT_VIOLATED:max_delegation_depth"));
+}
+
+#[test]
+fn ct_pep_033_constraint_violated_failure_code_includes_key() {
+    let mut poa = make_standard_poa();
+    poa.scope.core_verbs.insert(
+        "file.write".to_string(),
+        ToolPolicy {
+            allowed: true,
+            cost_cents_base: None,
+            constraints: Some(ToolConstraints {
+                path_patterns: Some(vec!["src/**".to_string()]),
+                allowed_commands: None,
+                denied_commands: None,
+                max_delegation_depth: None,
+                max_file_size_bytes: None,
+            }),
+        },
+    );
+
+    let engine = PepEngine::new(EnforcementMode::Stateful);
+    let request = make_enforcement_request("file.write", "docs/readme.md", "agent:test-agent-001");
+    let decision = engine.enforce_action(&request, &poa);
+    assert_eq!(decision.decision, Decision::Deny);
+    let violations = decision.violations.unwrap();
+    let cv = violations.iter().find(|v| v.code == "CONSTRAINT_VIOLATED:path_patterns").unwrap();
+    assert_eq!(cv.check_id, "CHK-09");
+}
+
+#[test]
+fn ct_pep_034_constraint_violated_denied_commands_key() {
+    let mut poa = make_standard_poa();
+    poa.scope.core_verbs.insert(
+        "shell.exec".to_string(),
+        ToolPolicy {
+            allowed: true,
+            cost_cents_base: None,
+            constraints: Some(ToolConstraints {
+                path_patterns: None,
+                allowed_commands: None,
+                denied_commands: Some(vec!["rm".into(), "shutdown".into()]),
+                max_delegation_depth: None,
+                max_file_size_bytes: None,
+            }),
+        },
+    );
+
+    let engine = PepEngine::new(EnforcementMode::Stateful);
+
+    let mut request = make_enforcement_request("shell.exec", "shell", "agent:test-agent-001");
+    request.action.resource_type = Some("shell".into());
+    let mut params = HashMap::new();
+    params.insert("command".to_string(), serde_json::json!("rm"));
+    request.action.parameters = Some(params);
+
+    let decision = engine.enforce_action(&request, &poa);
+    assert_eq!(decision.decision, Decision::Deny);
+    let violations = decision.violations.unwrap();
+    assert!(violations.iter().any(|v| v.code == "CONSTRAINT_VIOLATED:denied_commands"));
+}
+
+#[test]
+fn ct_pep_035_constraint_violated_file_size_key() {
+    let poa = make_standard_poa();
+    let engine = PepEngine::new(EnforcementMode::Stateful);
+
+    let mut request = make_enforcement_request("file.create", "src/big.rs", "agent:test-agent-001");
+    let mut params = HashMap::new();
+    params.insert("file_size_bytes".to_string(), serde_json::json!(2_000_000u64));
+    request.action.parameters = Some(params);
+
+    let decision = engine.enforce_action(&request, &poa);
+    assert_eq!(decision.decision, Decision::Deny);
+    let violations = decision.violations.unwrap();
+    assert!(violations.iter().any(|v| v.code == "CONSTRAINT_VIOLATED:max_file_size_bytes"));
+}
+
+#[test]
+fn ct_pep_036_oauth_pre_validate_malformed_jwt() {
+    let engine = PepEngine::new(EnforcementMode::Stateless);
+    let poa = make_standard_poa();
+
+    let mut request = make_enforcement_request("file.read", "src/main.rs", "agent:test-agent-001");
+    request.credential.token = Some("not-a-jwt".to_string());
+
+    let decision = engine.enforce_action(&request, &poa);
+    assert_eq!(decision.decision, Decision::Deny);
+    let violations = decision.violations.unwrap();
+    assert!(violations.iter().any(|v| v.code == "INVALID_TOKEN_FORMAT"));
+}
+
+#[test]
+fn ct_pep_037_oauth_pre_validate_prohibited_algorithm() {
+    let engine = PepEngine::new(EnforcementMode::Stateless);
+    let poa = make_standard_poa();
+
+    let header = base64::Engine::encode(
+        &base64::engine::general_purpose::URL_SAFE_NO_PAD,
+        r#"{"alg":"HS256","typ":"JWT"}"#,
+    );
+    let payload = base64::Engine::encode(
+        &base64::engine::general_purpose::URL_SAFE_NO_PAD,
+        r#"{"sub":"test"}"#,
+    );
+    let fake_token = format!("{header}.{payload}.fakesig");
+
+    let mut request = make_enforcement_request("file.read", "src/main.rs", "agent:test-agent-001");
+    request.credential.token = Some(fake_token);
+
+    let decision = engine.enforce_action(&request, &poa);
+    assert_eq!(decision.decision, Decision::Deny);
+    let violations = decision.violations.unwrap();
+    assert!(violations.iter().any(|v| v.code == "PROHIBITED_ALGORITHM"));
+}
+
+#[test]
+fn ct_pep_038_oauth_pre_validate_valid_format_passes() {
+    let engine = PepEngine::new(EnforcementMode::Stateless);
+    let poa = make_standard_poa();
+
+    let header = base64::Engine::encode(
+        &base64::engine::general_purpose::URL_SAFE_NO_PAD,
+        r#"{"alg":"RS256","typ":"JWT"}"#,
+    );
+    let payload = base64::Engine::encode(
+        &base64::engine::general_purpose::URL_SAFE_NO_PAD,
+        r#"{"sub":"test"}"#,
+    );
+    let fake_token = format!("{header}.{payload}.fakesig");
+
+    let mut request = make_enforcement_request("file.read", "src/main.rs", "agent:test-agent-001");
+    request.credential.token = Some(fake_token);
+
+    let decision = engine.enforce_action(&request, &poa);
+    assert_eq!(decision.decision, Decision::Permit);
+}
+
+#[test]
+fn ct_mgmt_027_pending_approval_status_exists() {
+    let status = MandateStatus::PendingApproval;
+    assert!(status.is_pending());
+    assert!(!status.is_terminal());
+    assert_eq!(format!("{}", status), "PENDING_APPROVAL");
+}
+
+#[test]
+fn ct_mgmt_028_delegation_creates_pending_approval() {
+    let mut manager = MandateManager::new();
+
+    let scope = {
+        let mut s = make_standard_scope();
+        s.governance_profile = GovernanceProfile::Strict;
+        s.platform_permissions = Some(PlatformPermissions {
+            deployment: Some(DeploymentPermissions {
+                targets: Some(vec!["dev".into(), "staging".into()]),
+                auto_deploy: Some(false),
+            }),
+            database: None,
+            shell: None,
+            packages: None,
+            external_apis: None,
+            secrets: None,
+        });
+        s
+    };
+
+    let create_resp = manager.create_mandate(MandateCreationRequest {
+        parties: Parties {
+            issuer: "platform:test".into(),
+            subject: "agent:parent".into(),
+            customer_id: "cust_test".into(),
+            project_id: "proj_test".into(),
+            issued_by: None,
+            approval_chain: Some(vec!["approver_1".into(), "approver_2".into()]),
+        },
+        scope,
+        requirements: Requirements {
+            approval_mode: ApprovalMode::Supervised,
+            budget: Some(Budget {
+                total_cents: Some(5000),
+                remaining_cents: Some(5000),
+            }),
+            session_limits: None,
+            ttl_seconds: Some(3600),
+        },
+    }).unwrap();
+
+    manager.activate_mandate(MandateActivationRequest {
+        mandate_id: create_resp.mandate_id.clone(),
+        activated_by: "admin".into(),
+    }).unwrap();
+
+    let child_id = manager.delegate_mandate(DelegationRequest {
+        parent_mandate_id: create_resp.mandate_id.clone(),
+        delegate_agent_id: "agent:child".into(),
+        scope_restriction: serde_json::json!({}),
+        delegated_by: "agent:parent".into(),
+    }).unwrap();
+
+    let child = manager.get_mandate(&child_id).unwrap();
+    assert_eq!(child.status, MandateStatus::PendingApproval);
+}
+
+#[test]
+fn ct_mgmt_029_approve_delegation_transitions_to_draft() {
+    let mut manager = MandateManager::new();
+
+    let scope = {
+        let mut s = make_standard_scope();
+        s.governance_profile = GovernanceProfile::Strict;
+        s.platform_permissions = Some(PlatformPermissions {
+            deployment: Some(DeploymentPermissions {
+                targets: Some(vec!["dev".into(), "staging".into()]),
+                auto_deploy: Some(false),
+            }),
+            database: None,
+            shell: None,
+            packages: None,
+            external_apis: None,
+            secrets: None,
+        });
+        s
+    };
+
+    let create_resp = manager.create_mandate(MandateCreationRequest {
+        parties: Parties {
+            issuer: "platform:test".into(),
+            subject: "agent:parent".into(),
+            customer_id: "cust_test".into(),
+            project_id: "proj_test".into(),
+            issued_by: None,
+            approval_chain: Some(vec!["approver_1".into(), "approver_2".into()]),
+        },
+        scope,
+        requirements: Requirements {
+            approval_mode: ApprovalMode::Supervised,
+            budget: Some(Budget {
+                total_cents: Some(5000),
+                remaining_cents: Some(5000),
+            }),
+            session_limits: None,
+            ttl_seconds: Some(3600),
+        },
+    }).unwrap();
+
+    manager.activate_mandate(MandateActivationRequest {
+        mandate_id: create_resp.mandate_id.clone(),
+        activated_by: "admin".into(),
+    }).unwrap();
+
+    let child_id = manager.delegate_mandate(DelegationRequest {
+        parent_mandate_id: create_resp.mandate_id.clone(),
+        delegate_agent_id: "agent:child".into(),
+        scope_restriction: serde_json::json!({}),
+        delegated_by: "agent:parent".into(),
+    }).unwrap();
+
+    let resp = manager.approve_delegation(DelegationApprovalRequest {
+        mandate_id: child_id.clone(),
+        approved_by: "approver_1".into(),
+    }).unwrap();
+
+    assert_eq!(resp.status, MandateStatus::Draft);
+    let child = manager.get_mandate(&child_id).unwrap();
+    assert_eq!(child.status, MandateStatus::Draft);
+}
+
+#[test]
+fn ct_mgmt_030_delegation_scope_narrowing() {
+    let mut manager = MandateManager::new();
+
+    let mut scope = make_standard_scope();
+    scope.allowed_regions = Some(vec!["DE".into(), "FR".into(), "IT".into()]);
+
+    let create_resp = manager.create_mandate(MandateCreationRequest {
+        parties: Parties {
+            issuer: "platform:test".into(),
+            subject: "agent:parent".into(),
+            customer_id: "cust_test".into(),
+            project_id: "proj_test".into(),
+            issued_by: None,
+            approval_chain: None,
+        },
+        scope,
+        requirements: Requirements {
+            approval_mode: ApprovalMode::Autonomous,
+            budget: Some(Budget {
+                total_cents: Some(5000),
+                remaining_cents: Some(5000),
+            }),
+            session_limits: None,
+            ttl_seconds: Some(3600),
+        },
+    }).unwrap();
+
+    manager.activate_mandate(MandateActivationRequest {
+        mandate_id: create_resp.mandate_id.clone(),
+        activated_by: "admin".into(),
+    }).unwrap();
+
+    let child_id = manager.delegate_mandate(DelegationRequest {
+        parent_mandate_id: create_resp.mandate_id,
+        delegate_agent_id: "agent:child".into(),
+        scope_restriction: serde_json::json!({
+            "allowed_paths": ["src/**"],
+            "allowed_regions": ["DE"],
+            "core_verbs": {
+                "file.read": {"allowed": true},
+                "file.create": {
+                    "allowed": true,
+                    "constraints": {
+                        "max_file_size_bytes": 500000
+                    }
+                }
+            }
+        }),
+        delegated_by: "agent:parent".into(),
+    }).unwrap();
+
+    let child = manager.get_mandate(&child_id).unwrap();
+    assert_eq!(child.scope.allowed_paths, Some(vec!["src/**".to_string()]));
+    assert_eq!(child.scope.allowed_regions, Some(vec!["DE".to_string()]));
+    let create_policy = child.scope.core_verbs.get("file.create").unwrap();
+    assert_eq!(
+        create_policy.constraints.as_ref().unwrap().max_file_size_bytes,
+        Some(500000)
+    );
+    let deploy_policy = child.scope.core_verbs.get("deploy").unwrap();
+    assert!(!deploy_policy.allowed);
+}
+
+#[test]
+fn ct_tm_001_poa_map_summary_type() {
+    let mut manager = MandateManager::new();
+    let create_resp = manager.create_mandate(MandateCreationRequest {
+        parties: Parties {
+            issuer: "platform:test".into(),
+            subject: "agent:test".into(),
+            customer_id: "cust_test".into(),
+            project_id: "proj_test".into(),
+            issued_by: None,
+            approval_chain: None,
+        },
+        scope: make_standard_scope(),
+        requirements: Requirements {
+            approval_mode: ApprovalMode::Autonomous,
+            budget: Some(Budget {
+                total_cents: Some(5000),
+                remaining_cents: Some(5000),
+            }),
+            session_limits: None,
+            ttl_seconds: Some(3600),
+        },
+    }).unwrap();
+
+    let map = manager.generate_poa_map(&create_resp.mandate_id).unwrap();
+    assert_eq!(map.mandate_id, create_resp.mandate_id);
+    assert_eq!(map.status, "DRAFT");
+    assert!(!map.allowed_verbs.is_empty());
+    assert!(map.budget_total_cents == Some(5000));
+    assert!(map.delegation_allowed);
+}
+
+#[test]
+fn ct_tm_002_poa_map_not_found() {
+    let manager = MandateManager::new();
+    let result = manager.generate_poa_map("mdt_nonexistent");
+    assert!(result.is_err());
+}
+
+#[test]
+fn ct_tm_003_poa_map_serialization() {
+    let mut manager = MandateManager::new();
+    let create_resp = manager.create_mandate(MandateCreationRequest {
+        parties: Parties {
+            issuer: "platform:test".into(),
+            subject: "agent:test".into(),
+            customer_id: "cust_test".into(),
+            project_id: "proj_test".into(),
+            issued_by: None,
+            approval_chain: None,
+        },
+        scope: make_standard_scope(),
+        requirements: Requirements {
+            approval_mode: ApprovalMode::Autonomous,
+            budget: None,
+            session_limits: None,
+            ttl_seconds: Some(3600),
+        },
+    }).unwrap();
+
+    let map = manager.generate_poa_map(&create_resp.mandate_id).unwrap();
+    let json = serde_json::to_value(&map).unwrap();
+    assert!(json.get("mandate_id").is_some());
+    assert!(json.get("governance_profile").is_some());
+    assert!(json.get("allowed_verbs").is_some());
+    assert!(json.get("denied_verbs").is_some());
+    assert!(json.get("platform_permissions_summary").is_some());
+}
+
+#[test]
+fn ct_reg_019_tariff_downgrade_deactivates_type_c() {
+    let mut registry = ConnectorSlotRegistry::new(TariffCode::M);
+
+    let signing_key = ed25519_dalek::SigningKey::generate(&mut rand::rngs::OsRng);
+    let verifying_key = signing_key.verifying_key();
+    registry.add_trusted_key(verifying_key);
+    let pub_hex = hex::encode(verifying_key.as_bytes());
+
+    let now = chrono::Utc::now();
+    let manifest = AdapterManifest {
+        manifest_version: "1.0".into(),
+        adapter_name: "ai-gov-adapter".into(),
+        adapter_type: "C".into(),
+        adapter_version: "1.0.0".into(),
+        slot_name: "ai_governance".into(),
+        namespace: "@gimel/ai-governance".into(),
+        issued_at: (now - chrono::Duration::hours(1)).to_rfc3339(),
+        expires_at: (now + chrono::Duration::days(30)).to_rfc3339(),
+        issuer: "gimel-foundation".into(),
+        capabilities: None,
+        checksum: None,
+        public_key: pub_hex,
+        signature: None,
+    };
+
+    let canonical = gauth_rs::crypto::canonical_json(
+        &serde_json::to_value(&manifest).unwrap(),
+    );
+    let sig = signing_key.sign(canonical.as_bytes());
+
+    registry.register_with_manifest(ConnectorSlot::AiGovernance, &manifest, &sig.to_bytes()).unwrap();
+    assert_eq!(registry.slot_status(ConnectorSlot::AiGovernance).status, SlotStatus::Active);
+
+    let events = registry.change_tariff(TariffCode::S);
+    assert_eq!(registry.slot_status(ConnectorSlot::AiGovernance).status, SlotStatus::Null);
+    assert!(events.iter().any(|e| e.slot == ConnectorSlot::AiGovernance && e.action == "deactivated"));
+}
+
+#[test]
+fn ct_mgmt_031_delegation_rejects_minimal_profile() {
+    let mut manager = MandateManager::new();
+
+    let mut scope = make_standard_scope();
+    scope.governance_profile = GovernanceProfile::Minimal;
+    scope.platform_permissions = Some(PlatformPermissions {
+        deployment: Some(DeploymentPermissions {
+            targets: Some(vec!["dev".into()]),
+            auto_deploy: Some(true),
+        }),
+        database: None,
+        shell: None,
+        packages: None,
+        external_apis: None,
+        secrets: None,
+    });
+
+    let create_resp = manager.create_mandate(MandateCreationRequest {
+        parties: Parties {
+            issuer: "platform:test".into(),
+            subject: "agent:parent".into(),
+            customer_id: "cust_test".into(),
+            project_id: "proj_test".into(),
+            issued_by: None,
+            approval_chain: None,
+        },
+        scope,
+        requirements: Requirements {
+            approval_mode: ApprovalMode::Autonomous,
+            budget: Some(Budget {
+                total_cents: Some(500),
+                remaining_cents: Some(500),
+            }),
+            session_limits: None,
+            ttl_seconds: Some(3600),
+        },
+    }).unwrap();
+
+    manager.activate_mandate(MandateActivationRequest {
+        mandate_id: create_resp.mandate_id.clone(),
+        activated_by: "admin".into(),
+    }).unwrap();
+
+    let result = manager.delegate_mandate(DelegationRequest {
+        parent_mandate_id: create_resp.mandate_id,
+        delegate_agent_id: "agent:child".into(),
+        scope_restriction: serde_json::json!({}),
+        delegated_by: "agent:parent".into(),
+    });
+
+    assert!(result.is_err());
+}
+
+#[test]
+fn ct_pep_040_oauth_pre_validate_non_allowlisted_algorithm() {
+    let engine = PepEngine::new(EnforcementMode::Stateless);
+    let poa = make_standard_poa();
+
+    let header = base64::Engine::encode(
+        &base64::engine::general_purpose::URL_SAFE_NO_PAD,
+        r#"{"alg":"PS256","typ":"JWT"}"#,
+    );
+    let payload = base64::Engine::encode(
+        &base64::engine::general_purpose::URL_SAFE_NO_PAD,
+        r#"{"sub":"test"}"#,
+    );
+    let fake_token = format!("{header}.{payload}.fakesig");
+
+    let mut request = make_enforcement_request("file.read", "src/main.rs", "agent:test-agent-001");
+    request.credential.token = Some(fake_token);
+
+    let decision = engine.enforce_action(&request, &poa);
+    assert_eq!(decision.decision, Decision::Deny);
+    let violations = decision.violations.unwrap();
+    assert!(violations.iter().any(|v| v.code == "PROHIBITED_ALGORITHM"));
+}
+
+#[test]
+fn ct_pep_041_oauth_pre_validate_es256_allowed() {
+    let engine = PepEngine::new(EnforcementMode::Stateless);
+    let poa = make_standard_poa();
+
+    let header = base64::Engine::encode(
+        &base64::engine::general_purpose::URL_SAFE_NO_PAD,
+        r#"{"alg":"ES256","typ":"JWT"}"#,
+    );
+    let payload = base64::Engine::encode(
+        &base64::engine::general_purpose::URL_SAFE_NO_PAD,
+        r#"{"sub":"test"}"#,
+    );
+    let fake_token = format!("{header}.{payload}.fakesig");
+
+    let mut request = make_enforcement_request("file.read", "src/main.rs", "agent:test-agent-001");
+    request.credential.token = Some(fake_token);
+
+    let decision = engine.enforce_action(&request, &poa);
+    assert_eq!(decision.decision, Decision::Permit);
+}
+
+#[test]
+fn ct_mgmt_032_approve_delegation_rejects_unauthorized_approver() {
+    let mut manager = MandateManager::new();
+
+    let scope = {
+        let mut s = make_standard_scope();
+        s.governance_profile = GovernanceProfile::Strict;
+        s.platform_permissions = Some(PlatformPermissions {
+            deployment: Some(DeploymentPermissions {
+                targets: Some(vec!["dev".into(), "staging".into()]),
+                auto_deploy: Some(false),
+            }),
+            database: None,
+            shell: None,
+            packages: None,
+            external_apis: None,
+            secrets: None,
+        });
+        s
+    };
+
+    let create_resp = manager.create_mandate(MandateCreationRequest {
+        parties: Parties {
+            issuer: "platform:test".into(),
+            subject: "agent:parent".into(),
+            customer_id: "cust_test".into(),
+            project_id: "proj_test".into(),
+            issued_by: None,
+            approval_chain: Some(vec!["approver_1".into(), "approver_2".into()]),
+        },
+        scope,
+        requirements: Requirements {
+            approval_mode: ApprovalMode::Supervised,
+            budget: Some(Budget {
+                total_cents: Some(5000),
+                remaining_cents: Some(5000),
+            }),
+            session_limits: None,
+            ttl_seconds: Some(3600),
+        },
+    }).unwrap();
+
+    manager.activate_mandate(MandateActivationRequest {
+        mandate_id: create_resp.mandate_id.clone(),
+        activated_by: "admin".into(),
+    }).unwrap();
+
+    let child_id = manager.delegate_mandate(DelegationRequest {
+        parent_mandate_id: create_resp.mandate_id,
+        delegate_agent_id: "agent:child".into(),
+        scope_restriction: serde_json::json!({}),
+        delegated_by: "agent:parent".into(),
+    }).unwrap();
+
+    let result = manager.approve_delegation(DelegationApprovalRequest {
+        mandate_id: child_id,
+        approved_by: "unauthorized_user".into(),
+    });
+
+    assert!(result.is_err());
+    let err = result.unwrap_err();
+    assert!(err.to_string().contains("not in the approval chain"));
+}
+
+#[test]
+fn ct_lic_013_check_license_compliance_detects_violations() {
+    let mut registry = ConnectorSlotRegistry::new(TariffCode::M);
+
+    let signing_key = ed25519_dalek::SigningKey::generate(&mut rand::rngs::OsRng);
+    let verifying_key = signing_key.verifying_key();
+    registry.add_trusted_key(verifying_key);
+    let pub_hex = hex::encode(verifying_key.as_bytes());
+
+    let now = chrono::Utc::now();
+    let manifest = AdapterManifest {
+        manifest_version: "1.0".into(),
+        adapter_name: "test-ai-gov".into(),
+        adapter_type: "C".into(),
+        adapter_version: "1.0.0".into(),
+        slot_name: "ai_governance".into(),
+        namespace: "@gimel/ai-governance".into(),
+        issued_at: (now - chrono::Duration::hours(1)).to_rfc3339(),
+        expires_at: (now + chrono::Duration::days(30)).to_rfc3339(),
+        issuer: "gimel-foundation".into(),
+        capabilities: None,
+        checksum: None,
+        public_key: pub_hex,
+        signature: None,
+    };
+
+    let canonical = gauth_rs::crypto::canonical_json(
+        &serde_json::to_value(&manifest).unwrap(),
+    );
+    let sig = signing_key.sign(canonical.as_bytes());
+
+    registry.register_with_manifest(ConnectorSlot::AiGovernance, &manifest, &sig.to_bytes()).unwrap();
+    assert_eq!(registry.slot_status(ConnectorSlot::AiGovernance).status, SlotStatus::Active);
+
+    registry.change_tariff(TariffCode::O);
+    let violations = registry.check_license_compliance();
+    assert!(violations.is_empty(), "After tariff downgrade deactivated Type C, no compliance violations should remain");
+
+    registry.change_tariff(TariffCode::M);
+    let violations_after = registry.check_license_compliance();
+    assert!(violations_after.is_empty() || violations_after.iter().all(|v| v.violation_code == "LICENSE_COMPLIANCE_VIOLATION"));
+}
+
+#[test]
+fn ct_pep_039_per_verb_delegation_depth_passes_when_within_limit() {
+    let mut poa = make_standard_poa();
+    poa.scope.core_verbs.insert(
+        "delegate.task".to_string(),
+        ToolPolicy {
+            allowed: true,
+            cost_cents_base: None,
+            constraints: Some(ToolConstraints {
+                path_patterns: None,
+                allowed_commands: None,
+                denied_commands: None,
+                max_delegation_depth: Some(2),
+                max_file_size_bytes: None,
+            }),
+        },
+    );
+    poa.delegation_chain = Some(vec![
+        DelegationLink {
+            delegator: "agent:root".into(),
+            delegate: "agent:test-agent-001".into(),
+            scope_restriction: serde_json::Value::Null,
+            delegated_at: None,
+            max_depth_remaining: Some(1),
+        },
+    ]);
+
+    let engine = PepEngine::new(EnforcementMode::Stateful);
+    let request = make_enforcement_request("delegate.task", "src/main.rs", "agent:test-agent-001");
+    let decision = engine.enforce_action(&request, &poa);
+    assert_eq!(decision.decision, Decision::Permit);
 }

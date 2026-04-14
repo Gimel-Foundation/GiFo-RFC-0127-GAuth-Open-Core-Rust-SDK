@@ -26,11 +26,88 @@ impl PepEngine {
         Self { mode }
     }
 
+    pub fn pre_validate_token(credential: &CredentialReference) -> Option<EnforcementDecision> {
+        if credential.format == CredentialFormat::Jwt {
+            if let Some(ref token) = credential.token {
+                let parts: Vec<&str> = token.split('.').collect();
+                if parts.len() != 3 {
+                    return Some(Self::deny_early(
+                        credential.mandate_id.as_deref(),
+                        "INVALID_TOKEN_FORMAT",
+                        "JWT must have exactly 3 parts (header.payload.signature)",
+                    ));
+                }
+
+                if let Ok(header_bytes) = base64::Engine::decode(
+                    &base64::engine::general_purpose::URL_SAFE_NO_PAD,
+                    parts[0],
+                ) {
+                    if let Ok(header) =
+                        serde_json::from_slice::<serde_json::Value>(&header_bytes)
+                    {
+                        if let Some(alg) = header.get("alg").and_then(|a| a.as_str()) {
+                            if alg != "RS256" && alg != "ES256" {
+                                return Some(Self::deny_early(
+                                    credential.mandate_id.as_deref(),
+                                    "PROHIBITED_ALGORITHM",
+                                    &format!(
+                                        "Algorithm '{alg}' is prohibited; only RS256 and ES256 are allowed"
+                                    ),
+                                ));
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        None
+    }
+
+    fn deny_early(
+        mandate_id: Option<&str>,
+        code: &str,
+        message: &str,
+    ) -> EnforcementDecision {
+        EnforcementDecision {
+            request_id: String::new(),
+            decision: Decision::Deny,
+            timestamp: chrono::Utc::now(),
+            enforcement_mode: EnforcementMode::Stateless,
+            checks: vec![],
+            enforced_constraints: None,
+            violations: Some(vec![Violation {
+                code: code.to_string(),
+                message: message.to_string(),
+                check_id: "PRE-VALIDATE".into(),
+                severity: ViolationSeverity::Error,
+            }]),
+            audit: Some(AuditRecord {
+                processing_time_ms: 0.0,
+                pep_version: PEP_VERSION.into(),
+                pep_interface_version: Some(PEP_INTERFACE_VERSION.into()),
+                credential_jti: None,
+                mandate_id: mandate_id.map(String::from),
+                agent_id: None,
+                action_verb: None,
+                action_resource: None,
+                checks_performed: Some(0),
+                checks_passed: Some(0),
+                checks_failed: Some(0),
+            }),
+        }
+    }
+
     pub fn enforce_action(
         &self,
         request: &EnforcementRequest,
         poa: &PoaCredential,
     ) -> EnforcementDecision {
+        if let Some(mut early_deny) = Self::pre_validate_token(&request.credential) {
+            early_deny.request_id = request.request_id.clone();
+            early_deny.enforcement_mode = self.mode.clone();
+            return early_deny;
+        }
+
         let start = Instant::now();
         let mut all_checks = Vec::new();
         let mut all_violations = Vec::new();
@@ -336,8 +413,13 @@ fn run_simple_check(
 
 fn collect_result(check: &CheckResult, violations: &mut Vec<Violation>, code: &str) {
     if check.result == CheckOutcome::Fail {
+        let effective_code = check
+            .failure_code
+            .as_deref()
+            .unwrap_or(code)
+            .to_string();
         violations.push(Violation {
-            code: code.to_string(),
+            code: effective_code,
             message: check.detail.clone().unwrap_or_default(),
             check_id: check.check_id.clone(),
             severity: ViolationSeverity::Error,

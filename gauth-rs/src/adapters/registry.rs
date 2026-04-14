@@ -551,6 +551,89 @@ impl ConnectorSlotRegistry {
             .map(|s| self.slot_states.get(s).unwrap())
             .collect()
     }
+
+    pub fn change_tariff(&mut self, new_tariff: TariffCode) -> Vec<TariffDowngradeEvent> {
+        let old_tariff = self.tariff;
+        self.tariff = new_tariff;
+        let mut events = Vec::new();
+
+        for slot in ConnectorSlot::all() {
+            let state = self.slot_states.get(slot).unwrap();
+            if state.status == SlotStatus::Active || state.status == SlotStatus::Pending {
+                let gate = check_tariff_gate(*slot, new_tariff);
+                if !gate.allowed {
+                    let state = self.slot_states.get_mut(slot).unwrap();
+                    state.status = SlotStatus::Null;
+                    state.implementation_label = "None".into();
+                    state.attestation_satisfied = false;
+                    events.push(TariffDowngradeEvent {
+                        slot: *slot,
+                        old_tariff,
+                        new_tariff,
+                        action: "deactivated".into(),
+                        reason: gate.reason.unwrap_or_default(),
+                    });
+                }
+            }
+        }
+
+        events
+    }
+
+    pub fn check_license_compliance(&self) -> Vec<LicenseComplianceViolation> {
+        let mut violations = Vec::new();
+
+        for slot in ConnectorSlot::all() {
+            let state = self.slot_states.get(slot).unwrap();
+            if state.status == SlotStatus::Active || state.status == SlotStatus::Pending {
+                let gate = check_tariff_gate(*slot, self.tariff);
+                if !gate.allowed {
+                    violations.push(LicenseComplianceViolation {
+                        slot: *slot,
+                        tariff: self.tariff,
+                        violation_code: "LICENSE_COMPLIANCE_VIOLATION".into(),
+                        message: format!(
+                            "Slot {} is {:?} but not allowed for tariff {}",
+                            slot, state.status, self.tariff
+                        ),
+                    });
+                }
+            }
+
+            if slot.requires_attestation()
+                && state.status == SlotStatus::Active
+                && !state.attestation_satisfied
+            {
+                violations.push(LicenseComplianceViolation {
+                    slot: *slot,
+                    tariff: self.tariff,
+                    violation_code: "LICENSE_COMPLIANCE_VIOLATION".into(),
+                    message: format!(
+                        "Type C slot {slot} is active but attestation not satisfied"
+                    ),
+                });
+            }
+        }
+
+        violations
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TariffDowngradeEvent {
+    pub slot: ConnectorSlot,
+    pub old_tariff: TariffCode,
+    pub new_tariff: TariffCode,
+    pub action: String,
+    pub reason: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct LicenseComplianceViolation {
+    pub slot: ConnectorSlot,
+    pub tariff: TariffCode,
+    pub violation_code: String,
+    pub message: String,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]

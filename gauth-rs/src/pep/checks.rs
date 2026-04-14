@@ -456,6 +456,26 @@ pub fn chk09_verb_constraints(
         }
     };
 
+    if let Some(max_depth) = tc.max_delegation_depth {
+        if let Some(ref chain) = poa.delegation_chain {
+            let depth = chain.len() as u32;
+            if depth > max_depth {
+                return (
+                    CheckResult {
+                        check_id: "CHK-09".into(),
+                        check_name: "Verb Constraints".into(),
+                        result: CheckOutcome::Fail,
+                        detail: Some(format!(
+                            "Delegation depth {depth} exceeds per-verb max {max_depth} for '{verb}'"
+                        )),
+                        failure_code: Some("CONSTRAINT_VIOLATED:max_delegation_depth".into()),
+                    },
+                    constraints_applied,
+                );
+            }
+        }
+    }
+
     if let Some(ref patterns) = tc.path_patterns {
         if !patterns.is_empty() {
             let matched = patterns.iter().any(|p| glob_match::glob_match(p, &action.resource));
@@ -469,7 +489,7 @@ pub fn chk09_verb_constraints(
                             "Resource '{}' does not match path_patterns",
                             action.resource
                         )),
-                        failure_code: None,
+                        failure_code: Some("CONSTRAINT_VIOLATED:path_patterns".into()),
                     },
                     constraints_applied,
                 );
@@ -494,7 +514,7 @@ pub fn chk09_verb_constraints(
                                 check_name: "Verb Constraints".into(),
                                 result: CheckOutcome::Fail,
                                 detail: Some(format!("Command '{cmd}' not in allowed_commands")),
-                                failure_code: None,
+                                failure_code: Some("CONSTRAINT_VIOLATED:allowed_commands".into()),
                             },
                             constraints_applied,
                         );
@@ -515,7 +535,7 @@ pub fn chk09_verb_constraints(
                                 check_name: "Verb Constraints".into(),
                                 result: CheckOutcome::Fail,
                                 detail: Some(format!("Command '{cmd}' in denied_commands")),
-                                failure_code: None,
+                                failure_code: Some("CONSTRAINT_VIOLATED:denied_commands".into()),
                             },
                             constraints_applied,
                         );
@@ -538,7 +558,7 @@ pub fn chk09_verb_constraints(
                                 detail: Some(format!(
                                     "File size {size} exceeds max {max_size}"
                                 )),
-                                failure_code: None,
+                                failure_code: Some("CONSTRAINT_VIOLATED:max_file_size_bytes".into()),
                             },
                             constraints_applied,
                         );

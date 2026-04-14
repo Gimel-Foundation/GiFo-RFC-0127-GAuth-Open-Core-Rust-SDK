@@ -33,9 +33,9 @@ See the `pnpm-workspace` skill for workspace structure, TypeScript setup, and pa
 ### Structure
 - `gauth-rs/src/types/` — PoA credential schema, governance profiles, capabilities, delegation
 - `gauth-rs/src/token/` — Extended Token JWT (RS256/ES256, HS256 prohibited), schema version `0116.2.2`
-- `gauth-rs/src/pep/` — Policy Enforcement Point with 16-check pipeline (CHK-01 through CHK-16), fail-closed
-- `gauth-rs/src/management/` — Mandate lifecycle (DRAFT→ACTIVE→SUSPENDED/REVOKED/EXPIRED/BUDGET_EXCEEDED/SUPERSEDED), license state machine (mpl_2_0→gimel_tos), two-tier ToS model
-- `gauth-rs/src/adapters/` — 7-slot connector model (Type A/B/C/D), Ed25519 signed manifests, tariff gating (O/M+O/L+O), adapter lifecycle (null→pending→active→error)
+- `gauth-rs/src/pep/` — Policy Enforcement Point with 16-check pipeline (CHK-01 through CHK-16), fail-closed, OAuth token pre-validation (PP-08), per-verb constraint keys (PP-06)
+- `gauth-rs/src/management/` — Mandate lifecycle (DRAFT→ACTIVE→SUSPENDED/REVOKED/EXPIRED/BUDGET_EXCEEDED/SUPERSEDED/PENDING_APPROVAL), license state machine (mpl_2_0→gimel_tos), two-tier ToS model, delegation with approval gate (DC-01–DC-04), scope narrowing (PP-07), PoaMapSummary (MA-01/MA-02)
+- `gauth-rs/src/adapters/` — 7-slot connector model (Type A/B/C/D), Ed25519 signed manifests, tariff gating (O/M+O/L+O), adapter lifecycle (null→pending→active→error), tariff downgrade re-evaluation (LB-08), license compliance detection (LB-09/LB-10)
 - `gauth-rs/src/crypto/` — Canonical JSON, SHA-256 scope checksum, Ed25519 helpers
 - `gauth-rs/src/error.rs` — Typed error hierarchy
 
@@ -57,7 +57,7 @@ See the `pnpm-workspace` skill for workspace structure, TypeScript setup, and pa
 
 ### Commands
 - `cd gauth-rs && cargo build` — build the SDK
-- `cd gauth-rs && cargo test` — run tests (80 tests: 4 unit + 76 integration)
+- `cd gauth-rs && cargo test` — run tests (100 tests: 4 unit + 96 integration)
 - `cd gauth-rs && cargo clippy` — lint check (zero warnings)
 
 ### Root-Level Files

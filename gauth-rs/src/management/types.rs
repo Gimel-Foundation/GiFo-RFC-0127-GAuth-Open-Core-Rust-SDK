@@ -14,6 +14,7 @@ pub enum MandateStatus {
     Revoked,
     BudgetExceeded,
     Superseded,
+    PendingApproval,
 }
 
 impl MandateStatus {
@@ -25,6 +26,10 @@ impl MandateStatus {
                 | MandateStatus::BudgetExceeded
                 | MandateStatus::Superseded
         )
+    }
+
+    pub fn is_pending(&self) -> bool {
+        matches!(self, MandateStatus::PendingApproval)
     }
 }
 
@@ -38,6 +43,7 @@ impl std::fmt::Display for MandateStatus {
             MandateStatus::Revoked => write!(f, "REVOKED"),
             MandateStatus::BudgetExceeded => write!(f, "BUDGET_EXCEEDED"),
             MandateStatus::Superseded => write!(f, "SUPERSEDED"),
+            MandateStatus::PendingApproval => write!(f, "PENDING_APPROVAL"),
         }
     }
 }
@@ -89,6 +95,7 @@ pub enum MandateOperation {
     ExtendBudget,
     ExtendTtl,
     Delegate,
+    ApproveDelegation,
     Expire,
     BudgetExhaust,
     Supersede,
@@ -187,6 +194,21 @@ pub struct DelegationRequest {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DelegationApprovalRequest {
+    pub mandate_id: String,
+    pub approved_by: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DelegationApprovalResponse {
+    pub mandate_id: String,
+    pub status: MandateStatus,
+    pub approved_by: String,
+    pub approved_at: chrono::DateTime<chrono::Utc>,
+    pub audit: MandateAuditEntry,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ValidationResult {
     pub accepted: bool,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -195,4 +217,30 @@ pub struct ValidationResult {
     pub ceiling_violations: Option<Vec<String>>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub consistency_errors: Option<Vec<String>>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PoaMapSummary {
+    pub mandate_id: String,
+    pub status: String,
+    pub governance_profile: String,
+    pub phase: String,
+    pub allowed_verbs: Vec<String>,
+    pub denied_verbs: Vec<String>,
+    pub allowed_paths: Vec<String>,
+    pub denied_paths: Vec<String>,
+    pub allowed_sectors: Vec<String>,
+    pub allowed_regions: Vec<String>,
+    pub budget_total_cents: Option<i64>,
+    pub budget_remaining_cents: Option<i64>,
+    pub approval_mode: String,
+    pub delegation_allowed: bool,
+    pub max_delegation_depth: u32,
+    pub delegation_chain_length: usize,
+    pub platform_permissions_summary: serde_json::Value,
+    pub created_at: chrono::DateTime<chrono::Utc>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub activated_at: Option<chrono::DateTime<chrono::Utc>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub expires_at: Option<chrono::DateTime<chrono::Utc>>,
 }

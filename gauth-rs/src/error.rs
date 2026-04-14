@@ -103,6 +103,15 @@ pub enum GAuthError {
     #[error("Crypto error: {0}")]
     Crypto(String),
 
+    #[error("License compliance violation: {0}")]
+    LicenseComplianceViolation(String),
+
+    #[error("Tariff downgrade: {0}")]
+    TariffDowngrade(String),
+
+    #[error("Delegation requires approval")]
+    DelegationRequiresApproval,
+
     #[error("Internal error: {0}")]
     Internal(String),
 }
