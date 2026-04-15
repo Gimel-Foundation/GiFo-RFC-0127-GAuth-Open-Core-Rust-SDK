@@ -63,6 +63,47 @@ See the `pnpm-workspace` skill for workspace structure, TypeScript setup, and pa
 - `cd gauth-rs && cargo test` — run tests (173 tests: 109 Block A + 64 Block B conformance)
 - `cd gauth-rs && cargo clippy` — lint check (zero warnings)
 
+## Dashboard & API
+
+**GAuth Dashboard** — React + Vite dashboard with 6 pages for managing GAuth mandates, profiles, and credentials.
+
+### Architecture
+- **Frontend**: React 19 + Vite, Tailwind CSS, shadcn/ui, wouter router, TanStack React Query
+- **API**: Express 5, esbuild bundled, PostgreSQL via Drizzle ORM
+- **Codegen**: Orval generates React Query hooks + Zod schemas from OpenAPI spec
+- **Auth**: Simple password gate (empty or "gauth" grants access), session in `sessionStorage`
+
+### Dashboard Pages
+1. **Dashboard** (`/`) — Overview with mandate stats, status breakdown, recent activity
+2. **Mandates** (`/mandates`) — List all mandates with filtering, status badges, actions
+3. **Mandate Detail** (`/mandates/:id`) — Full mandate view with lifecycle actions (activate/suspend/resume/revoke) + audit history
+4. **Profiles** (`/profiles`) — Governance profile comparison table with ceiling data (minimal/standard/strict/enterprise/behoerde)
+5. **Credentials** (`/credentials`) — VCI issuer metadata viewer (OpenID4VCI format)
+6. **PoA Map** (`/poa-map`) — Permission map visualization across all mandates
+
+### API Endpoints
+- `GET /api/healthz` — Health check
+- `GET /api/mgmt/health` — Management health with version info
+- `GET /api/mandates` — List mandates (with pagination/filtering)
+- `POST /api/mandates` — Create mandate
+- `GET /api/mandates/:id` — Get mandate detail
+- `POST /api/mandates/:id/activate` — Activate mandate
+- `POST /api/mandates/:id/suspend` — Suspend mandate (with reason)
+- `POST /api/mandates/:id/resume` — Resume mandate
+- `POST /api/mandates/:id/revoke` — Revoke mandate (with reason)
+- `GET /api/mandates/:id/history` — Audit history
+- `GET /api/mandates/:id/delegation-chain` — Delegation chain
+- `GET /api/profiles` — List governance profiles
+- `GET /api/profiles/:profile/ceilings` — Profile ceiling data
+- `GET /api/vci/issuer-metadata` — VCI issuer metadata
+
+### Database Tables
+- `mandates` — Mandate records (id, status, governance_profile, parties, scope, budget, delegation, timestamps)
+- `audit_entries` — Audit log (mandate_id, action, actor, metadata, timestamps)
+
+### Seed Data
+3 example mandates: enterprise/ACTIVE (agent-alpha-7), standard/DRAFT (research-bot-3), strict/SUSPENDED (audit-agent-1)
+
 ### Root-Level Files
 - `README.md` — GitHub monorepo README with protocol overview, repo structure, branch model
 - `CONTRIBUTION-AND-RELEASE-POLICY.md` — Normative contribution workflow, branch model (main/replit/feature), CI gates, release process (per SDK Implementation Guide §16)

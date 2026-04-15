@@ -1,4 +1,4 @@
-modules = ["nodejs-24", "rust"]
+modules = ["nodejs-24", "rust", "postgresql-16"]
 
 [deployment]
 router = "application"
@@ -26,6 +26,10 @@ externalPort = 80
 [[ports]]
 localPort = 8081
 externalPort = 8081
+
+[[ports]]
+localPort = 23183
+externalPort = 3000
 
 [nix]
 channel = "stable-25_05"

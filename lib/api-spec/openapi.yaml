@@ -3,20 +3,26 @@ info:
   # Do not change the title, if the title changes, the import paths will be broken
   title: Api
   version: 0.1.0
-  description: API specification
+  description: GAuth Open Core API — Mandate lifecycle, governance profiles, and credential management.
 servers:
   - url: /api
     description: Base API path
 tags:
   - name: health
-    description: Health operations
+    description: Health and management endpoints
+  - name: mandates
+    description: Mandate CRUD and lifecycle operations
+  - name: profiles
+    description: Governance profile and ceiling queries
+  - name: credentials
+    description: OpenID4VCI/VP credential endpoints
+
 paths:
   /healthz:
     get:
       operationId: healthCheck
       tags: [health]
       summary: Health check
-      description: Returns server health status
       responses:
         "200":
           description: Healthy
@@ -24,7 +30,245 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/HealthStatus"
+
+  /mgmt/health:
+    get:
+      operationId: mgmtHealth
+      tags: [health]
+      summary: Management health with version info
+      responses:
+        "200":
+          description: Management health
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MgmtHealthResponse"
+
+  /mandates:
+    get:
+      operationId: listMandates
+      tags: [mandates]
+      summary: List mandates with optional filters
+      parameters:
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 20
+        - name: cursor
+          in: query
+          schema:
+            type: string
+        - name: status
+          in: query
+          schema:
+            $ref: "#/components/schemas/MandateStatus"
+        - name: governance_profile
+          in: query
+          schema:
+            $ref: "#/components/schemas/GovernanceProfile"
+      responses:
+        "200":
+          description: Paginated mandate list
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MandateListResponse"
+
+    post:
+      operationId: createMandate
+      tags: [mandates]
+      summary: Create a new mandate
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateMandateRequest"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MandateResponse"
+
+  /mandates/{id}:
+    get:
+      operationId: getMandate
+      tags: [mandates]
+      summary: Get a single mandate
+      parameters:
+        - $ref: "#/components/parameters/MandateId"
+      responses:
+        "200":
+          description: Mandate details
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MandateResponse"
+        "404":
+          description: Not found
+
+  /mandates/{id}/activate:
+    post:
+      operationId: activateMandate
+      tags: [mandates]
+      summary: Activate a draft mandate
+      parameters:
+        - $ref: "#/components/parameters/MandateId"
+      responses:
+        "200":
+          description: Activated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MandateResponse"
+
+  /mandates/{id}/suspend:
+    post:
+      operationId: suspendMandate
+      tags: [mandates]
+      summary: Suspend an active mandate
+      parameters:
+        - $ref: "#/components/parameters/MandateId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ReasonRequest"
+      responses:
+        "200":
+          description: Suspended
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MandateResponse"
+
+  /mandates/{id}/resume:
+    post:
+      operationId: resumeMandate
+      tags: [mandates]
+      summary: Resume a suspended mandate
+      parameters:
+        - $ref: "#/components/parameters/MandateId"
+      responses:
+        "200":
+          description: Resumed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MandateResponse"
+
+  /mandates/{id}/revoke:
+    post:
+      operationId: revokeMandate
+      tags: [mandates]
+      summary: Revoke a mandate
+      parameters:
+        - $ref: "#/components/parameters/MandateId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ReasonRequest"
+      responses:
+        "200":
+          description: Revoked
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MandateResponse"
+
+  /mandates/{id}/history:
+    get:
+      operationId: getMandateHistory
+      tags: [mandates]
+      summary: Get audit history for a mandate
+      parameters:
+        - $ref: "#/components/parameters/MandateId"
+      responses:
+        "200":
+          description: Audit trail
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuditHistoryResponse"
+
+  /mandates/{id}/delegation-chain:
+    get:
+      operationId: getDelegationChain
+      tags: [mandates]
+      summary: Get delegation chain for a mandate
+      parameters:
+        - $ref: "#/components/parameters/MandateId"
+      responses:
+        "200":
+          description: Delegation chain
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DelegationChainResponse"
+
+  /profiles:
+    get:
+      operationId: listProfiles
+      tags: [profiles]
+      summary: List all governance profiles
+      responses:
+        "200":
+          description: Profile list
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/GovernanceProfile"
+
+  /profiles/{profile}/ceilings:
+    get:
+      operationId: getProfileCeilings
+      tags: [profiles]
+      summary: Get ceiling values for a governance profile
+      parameters:
+        - name: profile
+          in: path
+          required: true
+          schema:
+            $ref: "#/components/schemas/GovernanceProfile"
+      responses:
+        "200":
+          description: Profile ceilings
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProfileCeilings"
+
+  /vci/issuer-metadata:
+    get:
+      operationId: vciIssuerMetadata
+      tags: [credentials]
+      summary: OpenID4VCI issuer metadata
+      responses:
+        "200":
+          description: Issuer metadata
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VciIssuerMetadata"
+
 components:
+  parameters:
+    MandateId:
+      name: id
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+
   schemas:
     HealthStatus:
       type: object
@@ -34,3 +278,336 @@ components:
       required:
         - status
 
+    MgmtHealthResponse:
+      type: object
+      properties:
+        status:
+          type: string
+        version:
+          type: string
+        sdk:
+          type: string
+        uptime_seconds:
+          type: number
+      required:
+        - status
+        - version
+        - sdk
+        - uptime_seconds
+
+    MandateStatus:
+      type: string
+      enum:
+        - DRAFT
+        - ACTIVE
+        - SUSPENDED
+        - REVOKED
+        - EXPIRED
+
+    GovernanceProfile:
+      type: string
+      enum:
+        - minimal
+        - standard
+        - strict
+        - enterprise
+        - behoerde
+
+    ToolPolicy:
+      type: object
+      properties:
+        allowed:
+          type: boolean
+        requires_approval:
+          type: boolean
+        max_per_session:
+          type: integer
+          nullable: true
+
+    PlatformPermissions:
+      type: object
+      properties:
+        shell:
+          type: boolean
+        db_read:
+          type: boolean
+        db_write:
+          type: boolean
+        secrets_read:
+          type: boolean
+
+    MandateParties:
+      type: object
+      properties:
+        grantor:
+          type: string
+        subject:
+          type: string
+        intermediary:
+          type: string
+      required:
+        - grantor
+        - subject
+
+    MandateScope:
+      type: object
+      properties:
+        core_verbs:
+          type: object
+          additionalProperties:
+            $ref: "#/components/schemas/ToolPolicy"
+        platform_permissions:
+          $ref: "#/components/schemas/PlatformPermissions"
+        allowed_sectors:
+          type: array
+          items:
+            type: string
+        allowed_regions:
+          type: array
+          items:
+            type: string
+        allowed_decisions:
+          type: array
+          items:
+            type: string
+        allowed_paths:
+          type: array
+          items:
+            type: string
+        denied_paths:
+          type: array
+          items:
+            type: string
+
+    MandateBudget:
+      type: object
+      properties:
+        total_cents:
+          type: integer
+          nullable: true
+        remaining_cents:
+          type: integer
+          nullable: true
+
+    MandateDelegation:
+      type: object
+      properties:
+        parent_mandate_id:
+          type: string
+          nullable: true
+        delegation_depth:
+          type: integer
+        delegate_agent_id:
+          type: string
+        max_depth:
+          type: integer
+
+    MandateResponse:
+      type: object
+      properties:
+        mandate_id:
+          type: string
+        status:
+          $ref: "#/components/schemas/MandateStatus"
+        governance_profile:
+          $ref: "#/components/schemas/GovernanceProfile"
+        parties:
+          $ref: "#/components/schemas/MandateParties"
+        scope:
+          $ref: "#/components/schemas/MandateScope"
+        budget:
+          $ref: "#/components/schemas/MandateBudget"
+        delegation:
+          $ref: "#/components/schemas/MandateDelegation"
+        valid_from:
+          type: string
+          format: date-time
+          nullable: true
+        valid_until:
+          type: string
+          format: date-time
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+      required:
+        - mandate_id
+        - status
+        - governance_profile
+        - parties
+        - scope
+        - created_at
+        - updated_at
+
+    CreateMandateRequest:
+      type: object
+      properties:
+        governance_profile:
+          $ref: "#/components/schemas/GovernanceProfile"
+        parties:
+          $ref: "#/components/schemas/MandateParties"
+        scope:
+          $ref: "#/components/schemas/MandateScope"
+        budget:
+          $ref: "#/components/schemas/MandateBudget"
+        delegation:
+          $ref: "#/components/schemas/MandateDelegation"
+        valid_from:
+          type: string
+          format: date-time
+        valid_until:
+          type: string
+          format: date-time
+      required:
+        - parties
+        - scope
+
+    ReasonRequest:
+      type: object
+      properties:
+        reason:
+          type: string
+      required:
+        - reason
+
+    MandateListResponse:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/MandateResponse"
+        next_cursor:
+          type: string
+          nullable: true
+        total:
+          type: integer
+      required:
+        - items
+        - total
+
+    AuditEntry:
+      type: object
+      properties:
+        id:
+          type: string
+        mandate_id:
+          type: string
+        action:
+          type: string
+        actor:
+          type: string
+          nullable: true
+        reason:
+          type: string
+          nullable: true
+        previous_status:
+          type: string
+          nullable: true
+        new_status:
+          type: string
+          nullable: true
+        metadata:
+          type: object
+        timestamp:
+          type: string
+          format: date-time
+      required:
+        - id
+        - mandate_id
+        - action
+        - timestamp
+
+    AuditHistoryResponse:
+      type: object
+      properties:
+        entries:
+          type: array
+          items:
+            $ref: "#/components/schemas/AuditEntry"
+      required:
+        - entries
+
+    DelegationChainEntry:
+      type: object
+      properties:
+        mandate_id:
+          type: string
+        delegation_depth:
+          type: integer
+        delegate_agent_id:
+          type: string
+        parent_mandate_id:
+          type: string
+          nullable: true
+        budget_reserved_cents:
+          type: integer
+      required:
+        - mandate_id
+        - delegation_depth
+        - delegate_agent_id
+        - budget_reserved_cents
+
+    DelegationChainResponse:
+      type: object
+      properties:
+        chain:
+          type: array
+          items:
+            $ref: "#/components/schemas/DelegationChainEntry"
+      required:
+        - chain
+
+    ProfileCeilings:
+      type: object
+      properties:
+        min_approval_mode:
+          type: string
+        agent_delegation:
+          type: boolean
+        max_delegation_depth:
+          type: integer
+        max_session_duration_minutes:
+          type: integer
+        max_tool_calls:
+          type: integer
+        shell_mode:
+          type: string
+        db_production:
+          type: boolean
+        db_write:
+          type: boolean
+        secrets_read:
+          type: boolean
+      required:
+        - min_approval_mode
+        - agent_delegation
+        - max_delegation_depth
+        - max_session_duration_minutes
+        - max_tool_calls
+        - shell_mode
+        - db_production
+        - db_write
+        - secrets_read
+
+    VciIssuerMetadata:
+      type: object
+      properties:
+        credential_issuer:
+          type: string
+        credential_endpoint:
+          type: string
+        token_endpoint:
+          type: string
+        credential_configurations_supported:
+          type: object
+          additionalProperties:
+            type: object
+      required:
+        - credential_issuer
+        - credential_endpoint
+        - token_endpoint
+        - credential_configurations_supported
