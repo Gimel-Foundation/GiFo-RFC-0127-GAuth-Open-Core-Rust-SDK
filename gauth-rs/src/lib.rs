@@ -25,6 +25,9 @@ pub mod management;
 pub mod adapters;
 pub mod crypto;
 pub mod error;
+pub mod vc;
+pub mod storage;
+pub mod profiles;
 
 pub use types::*;
 pub use error::GAuthError;

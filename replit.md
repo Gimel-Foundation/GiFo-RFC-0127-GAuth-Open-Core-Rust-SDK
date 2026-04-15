@@ -38,6 +38,9 @@ See the `pnpm-workspace` skill for workspace structure, TypeScript setup, and pa
 - `gauth-rs/src/adapters/` — 7-slot connector model (Type A/B/C/D), Ed25519 signed manifests, tariff gating (O/M+O/L+O), adapter lifecycle (null→pending→active→error), tariff downgrade re-evaluation (LB-08), license compliance detection (LB-09/LB-10)
 - `gauth-rs/src/crypto/` — Canonical JSON, SHA-256 scope checksum, Ed25519 helpers
 - `gauth-rs/src/error.rs` — Typed error hierarchy
+- `gauth-rs/src/vc/` — W3C Verifiable Credentials v2.0: DID resolution (did:web, did:key), SD-JWT selective disclosure, Bitstring Status List v2.0, PoA→VC serializer with Data Integrity Proofs (eddsa-rdfc-2022), OpenID4VCI/VP credential exchange
+- `gauth-rs/src/storage/` — MandateRepository trait + InMemoryMandateRepository
+- `gauth-rs/src/profiles/` — Governance profile ceiling table, validate_against_ceiling()
 
 ### Key Design Decisions
 - **License**: MPL-2.0 with Exclusions Addendum (AI-enabled Governance, Web3 Integration, DNA-based Identities and PQC are proprietary); see ADDITIONAL-TERMS.md
@@ -57,7 +60,7 @@ See the `pnpm-workspace` skill for workspace structure, TypeScript setup, and pa
 
 ### Commands
 - `cd gauth-rs && cargo build` — build the SDK
-- `cd gauth-rs && cargo test` — run tests (105 tests: 4 unit + 101 integration)
+- `cd gauth-rs && cargo test` — run tests (173 tests: 109 Block A + 64 Block B conformance)
 - `cd gauth-rs && cargo clippy` — lint check (zero warnings)
 
 ### Root-Level Files
@@ -66,3 +69,5 @@ See the `pnpm-workspace` skill for workspace structure, TypeScript setup, and pa
 - `gauth-rs/LICENSE` — Mozilla Public License 2.0 (full text)
 - `gauth-rs/ADDITIONAL-TERMS.md` — Exclusions Addendum (§15.6)
 - `gauth-rs/README.md` — Rust SDK documentation with architecture, quick start, full API reference
+- `gauth-rs/CONTRIBUTING.md` — Contribution policy, code style, test requirements, exclusions
+- `gauth-rs/tests/conformance_block_b.rs` — Block B conformance tests (VC, DID, SD-JWT, StatusList, OpenID4VP, storage, profiles)

@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: MPL-2.0
 mod lifecycle;
 pub mod license;
-mod types;
+pub mod types;
 mod validation;
 
 pub use lifecycle::*;

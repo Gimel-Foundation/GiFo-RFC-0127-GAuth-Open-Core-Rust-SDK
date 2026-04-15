@@ -25,6 +25,7 @@ glob-match = "0.2"
 rand = "0.8"
 hex = "0.4"
 base64 = "0.22"
+flate2 = "1"
 
 [dev-dependencies]
 tokio = { version = "1", features = ["full"] }

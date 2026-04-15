@@ -54,6 +54,9 @@ This SDK is **free to use** under the Mozilla Public License 2.0. No Gimel accou
 | `adapters` | 7-slot connector model with Type A/B/C/D classification, Ed25519 signed manifests, tariff gating (O/M+O/L+O), adapter lifecycle (null → pending → active → error) |
 | `crypto` | Canonical JSON serialization, SHA-256 scope checksum, Ed25519 signature helpers |
 | `error` | Comprehensive error hierarchy with typed variants for each failure mode |
+| `vc` | W3C Verifiable Credentials v2.0 — DID resolution (did:web, did:key), SD-JWT selective disclosure, Bitstring Status List v2.0, PoA→VC serializer with Data Integrity Proofs (eddsa-rdfc-2022), OpenID4VCI/VP credential exchange |
+| `storage` | Mandate repository trait abstraction with in-memory implementation. Plug-in interface for persistent backends (SQL, KV stores) |
+| `profiles` | Governance profile ceiling table — budget, TTL, delegation depth limits. Ceiling validation for mandate creation |
 
 ## 7-Slot Connector Model
 
@@ -236,6 +239,73 @@ let decision = engine.enforce_action(
 );
 
 assert_eq!(decision.decision, Decision::Permit);
+```
+
+## Verifiable Credentials Module (`vc`)
+
+The `vc` module implements the W3C VC Data Model v2.0 translation layer specified in Gap Spec G-07:
+
+| Sub-module | Description |
+|-----------|-------------|
+| `vc::did` | DID resolution for `did:web` and `did:key` methods. Produces W3C DID Documents with verificationMethod, authentication, and assertionMethod. Includes ephemeral key generation via `create_did_key()`. |
+| `vc::sd_jwt` | SD-JWT (Selective Disclosure JWT) per draft-ietf-oauth-selective-disclosure-jwt. Creates compact SD-JWTs with redacted claims and SHA-256 disclosure digests. Verification reconstructs disclosed claims. |
+| `vc::status_list` | Bitstring Status List v2.0 (W3C) for credential revocation. Zlib-compressed bitstring with base64url encoding. Supports revocation reasons and `to_status_list_credential()` for W3C VC format output. |
+| `vc::serializer` | PoA mandate → W3C VC v2.0 serialization. Maps mandate fields to credentialSubject, generates CredentialStatus entries, and produces JWT payloads via `vc_to_jwt_payload()`. Data Integrity Proofs use `eddsa-rdfc-2022` cryptosuite with Ed25519 signing. |
+| `vc::openid` | OpenID4VCI issuer (credential offer → token exchange → issuance) and OpenID4VP verifier (presentation request → VP submission → verification). Includes nonce management, trusted issuer registry, and status list integration. |
+
+### Example: Issue and Verify a VC
+
+```rust
+use gauth_rs::vc::serializer::poa_to_vc;
+use gauth_rs::vc::openid::{OpenID4VCIssuer, OpenID4VPVerifier};
+
+// 1. Serialize mandate to W3C VC
+let vc = poa_to_vc(&mandate, "did:web:example.com", "", 0);
+
+// 2. Issue via OpenID4VCI
+let mut issuer = OpenID4VCIssuer::new(
+    "https://gauth.example.com",
+    signing_key,
+    "did:web:gauth.example.com#key-1",
+    300,
+);
+let offer = issuer.create_credential_offer("mandate-001");
+let token = issuer.exchange_token(&offer.grants.pre_authorized_code.pre_authorized_code).unwrap();
+let credential = issuer.issue_credential(&token.access_token, &mandate, &token.c_nonce).unwrap();
+
+// 3. Verify via OpenID4VP
+let mut verifier = OpenID4VPVerifier::new("did:web:verifier.com", "https://verifier.com/cb", 300);
+verifier.register_trusted_issuer("did:web:gauth.example.com", verifying_key);
+let result = verifier.verify_presentation(&vp, &nonce);
+assert!(result.verified);
+```
+
+## Storage Abstraction
+
+The `storage` module provides a trait-based repository pattern for mandate persistence:
+
+```rust
+use gauth_rs::storage::{MandateRepository, InMemoryMandateRepository};
+
+let mut repo = InMemoryMandateRepository::new();
+repo.save(&mandate).unwrap();
+let found = repo.find_by_id("mandate-001").unwrap();
+let active = repo.find_active_by_subject("agent-1").unwrap();
+```
+
+Implement the `MandateRepository` trait to add your own backend (PostgreSQL, Redis, etc.).
+
+## Profiles / Ceilings
+
+The `profiles` module defines per-profile ceiling tables matching RFC 0115/0118 §9.2:
+
+```rust
+use gauth_rs::profiles::{get_ceiling, validate_against_ceiling};
+use gauth_rs::types::GovernanceProfile;
+
+let ceiling = get_ceiling(&GovernanceProfile::Standard).unwrap();
+let violations = validate_against_ceiling(&GovernanceProfile::Standard, Some(99999), None, None);
+// violations will flag budget exceeding Standard ceiling
 ```
 
 ## RFC References
