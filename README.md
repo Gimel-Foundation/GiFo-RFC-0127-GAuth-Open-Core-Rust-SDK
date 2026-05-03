@@ -1,6 +1,6 @@
 # GAuth SDK Monorepo
 
-**Gimel Foundation gGmbH i.G. — Version 0.91 (Public Preview)**
+**Gimel Foundation gGmbH i.G. — Version 0.92 (Public Preview)**
 
 [![License: MPL-2.0](https://img.shields.io/badge/License-MPL%202.0-brightgreen.svg)](https://opensource.org/licenses/MPL-2.0)
 [![Status: Public Preview](https://img.shields.io/badge/Status-Public%20Preview-blue.svg)]()
