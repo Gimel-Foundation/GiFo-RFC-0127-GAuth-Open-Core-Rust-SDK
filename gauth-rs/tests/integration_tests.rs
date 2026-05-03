@@ -1125,7 +1125,7 @@ fn test_pep_audit_record_present() {
     let decision = engine.enforce_action(&request, &poa);
 
     let audit = decision.audit.unwrap();
-    assert_eq!(audit.pep_version, "0.91.0");
+    assert_eq!(audit.pep_version, "0.92.0");
     assert_eq!(audit.pep_interface_version, Some("1.2".to_string()));
     assert!(audit.processing_time_ms >= 0.0);
     assert_eq!(audit.agent_id, Some("agent:test-agent-001".to_string()));
@@ -2154,7 +2154,7 @@ fn ct_mgmt_027_pending_approval_status_exists() {
     let status = MandateStatus::PendingApproval;
     assert!(status.is_pending());
     assert!(!status.is_terminal());
-    assert_eq!(format!("{}", status), "PENDING_APPROVAL");
+    assert_eq!(format!("{status}"), "PENDING_APPROVAL");
 }
 
 #[test]

@@ -40,7 +40,7 @@ This monorepo contains the official SDK implementations across multiple language
 
 | Language | Directory | Status | Version |
 |----------|-----------|--------|---------|
-| **Rust** | [`gauth-rs/`](gauth-rs/) | Public Preview | Version 0.91 |
+| **Rust** | [`gauth-rs/`](gauth-rs/) | Public Preview | Version 0.92 |
 
 Additional SDK implementations (TypeScript, Python, Go, Java, Swift, Kotlin) will follow the same architecture and conformance requirements.
 

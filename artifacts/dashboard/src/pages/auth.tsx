@@ -30,7 +30,7 @@ export default function AuthPage() {
             GAuth Dashboard
           </CardTitle>
           <p className="font-mono text-xs text-muted-foreground mt-1">
-            Open Core v0.91 — Rust SDK
+            Open Core v0.92 — Rust SDK
           </p>
         </CardHeader>
         <CardContent className="pt-6">

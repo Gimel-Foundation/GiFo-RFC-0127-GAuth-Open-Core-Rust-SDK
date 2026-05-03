@@ -1,6 +1,6 @@
 # gauth-rs
 
-**GAuth Open Core Rust SDK — Version 0.91 (Public Preview)**
+**GAuth Open Core Rust SDK — Version 0.92 (Public Preview)**
 
 AI authorization framework implementing the GiFo GAuth protocol.
 
@@ -17,7 +17,7 @@ This SDK is **free to use** under the Mozilla Public License 2.0. No Gimel accou
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
-│                    gauth-rs SDK Version 0.91                  │
+│                    gauth-rs SDK Version 0.92                  │
 │                        (Public Preview)                       │
 ├──────────────┬──────────┬────────────┬──────────────────────┤
 │   types/     │  token/  │    pep/    │    management/       │

@@ -34,7 +34,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
             GAuth
           </div>
           <div className="font-mono text-[10px] text-muted-foreground uppercase">
-            Open Core v0.91 — Rust SDK
+            Open Core v0.92 — Rust SDK
           </div>
         </div>
 

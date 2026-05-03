@@ -28,7 +28,7 @@ See the `pnpm-workspace` skill for workspace structure, TypeScript setup, and pa
 
 ## gauth-rs (Rust SDK)
 
-**GAuth Open Core Rust SDK** Version 0.91 (Public Preview) implementing the GiFo GAuth authorization protocol (RFCs 0110-0118), aligned with SDK Implementation Guide.
+**GAuth Open Core Rust SDK** Version 0.92 (Public Preview) implementing the GiFo GAuth authorization protocol (RFCs 0110-0118), aligned with SDK Implementation Guide.
 
 ### Structure
 - `gauth-rs/src/types/` — PoA credential schema, governance profiles, capabilities, delegation

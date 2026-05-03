@@ -8,7 +8,7 @@ use crate::types::PoaCredential;
 use super::checks;
 use super::types::*;
 
-const PEP_VERSION: &str = "0.91.0";
+const PEP_VERSION: &str = "0.92.0";
 const PEP_INTERFACE_VERSION: &str = "1.2";
 
 pub struct PepEngine {
